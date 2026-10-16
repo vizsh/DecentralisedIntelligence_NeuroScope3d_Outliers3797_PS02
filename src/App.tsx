@@ -59,7 +59,10 @@ export default function App() {
       <div className="flex min-h-0 flex-1 overflow-hidden">
         <NavigationSidebar />
 
-        <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+        <div
+          key={activeWorkspace}
+          className="animate-fade-in flex min-h-0 flex-1 flex-col overflow-hidden"
+        >
           {activeWorkspace === 'dashboard' && <CommandCentreWorkspace />}
 
           {activeWorkspace === 'viewer' && (
