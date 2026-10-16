@@ -39,6 +39,7 @@ class Metric:
     region: str
     dice: float
     sensitivity: float
+    precision: float
     intersection: int
     predicted: int
     expert: int
@@ -48,6 +49,7 @@ class Metric:
             "region": self.region,
             "dice": round(self.dice, 4),
             "sensitivity": round(self.sensitivity, 4),
+            "precision": round(self.precision, 4),
             "intersection_voxels": self.intersection,
             "predicted_voxels": self.predicted,
             "expert_voxels": self.expert,
@@ -63,7 +65,8 @@ def compare(pred: np.ndarray, truth: np.ndarray, region: str) -> Metric:
     # An empty region that was correctly predicted empty scores 1, not 0/0.
     dice = 1.0 if np_ + nt == 0 else (2.0 * inter) / (np_ + nt)
     sens = 1.0 if nt == 0 else inter / nt
-    return Metric(region, dice, sens, inter, np_, nt)
+    prec = 1.0 if np_ == 0 else inter / np_
+    return Metric(region, dice, sens, prec, inter, np_, nt)
 
 
 def score_all(pred: np.ndarray, truth: np.ndarray) -> dict[str, Metric]:

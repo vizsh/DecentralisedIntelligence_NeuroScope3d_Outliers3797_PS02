@@ -88,6 +88,10 @@ interface State {
 
   helpOpen: boolean
   setHelpOpen: (open: boolean) => void
+
+  /** Roadmap Section 6 Viewer Modes: Anatomy, Segmentation, Exploration */
+  viewer3DMode: 'anatomy' | 'segmentation' | 'exploration'
+  setViewer3DMode: (mode: 'anatomy' | 'segmentation' | 'exploration') => void
 }
 
 export const useStore = create<State>((set) => ({
@@ -153,4 +157,16 @@ export const useStore = create<State>((set) => ({
 
   helpOpen: false,
   setHelpOpen: (helpOpen) => set({ helpOpen }),
+
+  viewer3DMode: 'segmentation',
+  setViewer3DMode: (viewer3DMode) => {
+    if (viewer3DMode === 'anatomy') {
+      set({ viewer3DMode, brainVisible: true, brainOpacity: 0.28, isolated: null, wireframe: false })
+    } else if (viewer3DMode === 'segmentation') {
+      set({ viewer3DMode, brainVisible: true, brainOpacity: 0.18 })
+    } else {
+      // exploration mode
+      set({ viewer3DMode, autoOrbit: false })
+    }
+  },
 }))

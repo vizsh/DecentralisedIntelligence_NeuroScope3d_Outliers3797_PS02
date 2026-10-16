@@ -52,6 +52,7 @@ def test_compare_perfect_match_scores_one():
     m = compare(label, label, "ET")
     assert m.dice == pytest.approx(1.0)
     assert m.sensitivity == pytest.approx(1.0)
+    assert m.precision == pytest.approx(1.0)
 
 
 def test_compare_empty_region_scores_one_not_zero_over_zero():
@@ -59,6 +60,7 @@ def test_compare_empty_region_scores_one_not_zero_over_zero():
     m = compare(label, label, "ET")
     assert m.dice == 1.0
     assert m.sensitivity == 1.0
+    assert m.precision == 1.0
 
 
 def test_compare_no_overlap_scores_zero():
@@ -69,6 +71,7 @@ def test_compare_no_overlap_scores_zero():
     m = compare(pred, truth, "ET")
     assert m.dice == 0.0
     assert m.sensitivity == 0.0
+    assert m.precision == 0.0
 
 
 def test_connectivity_single_component():

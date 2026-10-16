@@ -49,6 +49,24 @@ export default function BottomActivityStrip() {
           <span className="text-slate-500">Tool:</span>
           <span className="text-slate-200 uppercase">{tool}</span>
         </div>
+
+        {/* Engine & Execution Mode */}
+        <div className="hidden lg:flex items-center gap-1.5 border-l border-edge/80 pl-3">
+          <span className="text-slate-500">Engine:</span>
+          {bundle?.liveMetadata?.execution_mode === 'model_inference' ? (
+            <span className="rounded border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-semibold text-emerald-300">
+              MONAI SegResNet (Inference)
+            </span>
+          ) : bundle?.liveMetadata?.execution_mode === 'heuristic_fallback' ? (
+            <span className="rounded border border-amber-500/30 bg-amber-500/10 px-1.5 py-0.5 text-[9px] font-semibold text-amber-300">
+              Heuristic Baseline
+            </span>
+          ) : (
+            <span className="rounded border border-indigo-500/30 bg-indigo-500/10 px-1.5 py-0.5 text-[9px] font-semibold text-indigo-300">
+              Synthetic Phantom
+            </span>
+          )}
+        </div>
       </div>
 
       <div className="flex items-center gap-3">

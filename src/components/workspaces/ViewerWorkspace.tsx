@@ -15,6 +15,8 @@ export default function ViewerWorkspace() {
   const measure = useStore((s) => s.measure)
   const clearMeasure = useStore((s) => s.clearMeasure)
   const activeSequence = useStore((s) => s.sequence)
+  const viewer3DMode = useStore((s) => s.viewer3DMode)
+  const setViewer3DMode = useStore((s) => s.setViewer3DMode)
 
   const bookmarks = useWorkspaceStore((s) => s.bookmarks)
   const addBookmark = useWorkspaceStore((s) => s.addBookmark)
@@ -104,6 +106,37 @@ export default function ViewerWorkspace() {
               title="PACS Window/Level Contrast (Shortcut: W)"
             >
               Window/Level
+            </button>
+          </div>
+
+          {/* 3D Viewer Modes (Roadmap Section 6) */}
+          <div className="flex rounded border border-edge bg-panel-2 p-0.5 font-mono text-[10px]">
+            <button
+              onClick={() => setViewer3DMode('anatomy')}
+              className={`rounded px-2 py-0.5 transition ${
+                viewer3DMode === 'anatomy' ? 'bg-indigo-500/25 text-indigo-200 font-bold' : 'text-slate-400 hover:text-slate-200'
+              }`}
+              title="Anatomy Mode: anatomical brain shell in context"
+            >
+              Anatomy
+            </button>
+            <button
+              onClick={() => setViewer3DMode('segmentation')}
+              className={`rounded px-2 py-0.5 transition ${
+                viewer3DMode === 'segmentation' ? 'bg-sky-500/25 text-sky-200 font-bold' : 'text-slate-400 hover:text-slate-200'
+              }`}
+              title="Segmentation Mode: independent WT, TC, ET layers"
+            >
+              Segmentation
+            </button>
+            <button
+              onClick={() => setViewer3DMode('exploration')}
+              className={`rounded px-2 py-0.5 transition ${
+                viewer3DMode === 'exploration' ? 'bg-amber-500/25 text-amber-200 font-bold' : 'text-slate-400 hover:text-slate-200'
+              }`}
+              title="Exploration Mode: surface-to-slice interactive inspection"
+            >
+              Exploration
             </button>
           </div>
 

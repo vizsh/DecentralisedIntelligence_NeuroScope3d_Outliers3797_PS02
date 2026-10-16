@@ -222,7 +222,7 @@ async def inspect_study(
         for s_name, vol in val.volumes.items():
             seq_info[s_name] = {
                 "shape": list(vol.grid.shape),
-                "spacing": [round(float(s), 3) for s in vol.grid.spacing],
+                "spacing": [round(float(s), 3) for s in vol.spacing],
                 "units": "mm",
             }
 
@@ -230,7 +230,7 @@ async def inspect_study(
         geometry = {
             "compatible": val.ok and len(val.volumes) == 4,
             "shape": list(ref_vol.grid.shape) if ref_vol else None,
-            "spacing": [round(float(s), 3) for s in ref_vol.grid.spacing] if ref_vol else None,
+            "spacing": [round(float(s), 3) for s in ref_vol.spacing] if ref_vol else None,
             "orientation": "RAS+",
         }
 
@@ -261,7 +261,7 @@ def _findings(findings) -> list[dict]:
     return [{"code": f.code, "sequence": f.sequence, "message": f.message} for f in findings]
 
 
-def process(job: str, paths: dict[str, Path], expert_path: Path | None, out: Path) -> dict:
+def process(job: str, paths: dict[str, Path], expert_path: Path | None, out: Path, source_mode: str | None = None) -> dict:
     started = time.perf_counter()
     report_stage(job, "validating")
     validation = validate_study(paths)
@@ -325,6 +325,13 @@ def process(job: str, paths: dict[str, Path], expert_path: Path | None, out: Pat
     report_stage(job, "reporting")
 
     info = segmenter.info
+    if source_mode == "synthetic":
+        execution_mode = "synthetic_demo"
+    elif isinstance(segmenter, HeuristicSegmenter):
+        execution_mode = "heuristic_fallback"
+    else:
+        execution_mode = "model_inference"
+
     uncertainty_summary = None
     if uncertainty_on_input_grid is not None:
         uncertainty_summary = {
@@ -340,6 +347,7 @@ def process(job: str, paths: dict[str, Path], expert_path: Path | None, out: Pat
         "tool_version": __version__,
         "disclaimer": DISCLAIMER,
         "description": "Suspected tumour regions predicted by the model. Estimated volumes.",
+        "execution_mode": execution_mode,
         "regions": volumes_all(label_out, reference.spacing),
         "connectivity": connectivity_all(label_out, reference.spacing),
         "geometry": geometry_all(label_out, reference.spacing),
@@ -355,6 +363,7 @@ def process(job: str, paths: dict[str, Path], expert_path: Path | None, out: Pat
             "name": info.name, "version": info.version, "licence": info.licence,
             "source": info.source, "deterministic": info.deterministic,
             "tta_passes": prediction.tta_passes,
+            "execution_mode": execution_mode,
         },
         "warnings": _findings(validation.warnings) + ([{"code": "bad_expert_mask", "message": expert_warning, "sequence": "expert"}] if expert_warning else []),
         "input_sha256": {k: sha256(Path(p)) for k, p in paths.items()},
@@ -392,7 +401,7 @@ def _valid_job_id(job: str) -> bool:
     return len(job) == 32 and all(c in "0123456789abcdef" for c in job)
 
 
-async def _run_pipeline(job: str, paths: dict[str, Path], expert_path: Path | None, out: Path) -> dict:
+async def _run_pipeline(job: str, paths: dict[str, Path], expert_path: Path | None, out: Path, source_mode: str | None = None) -> dict:
     """Run process() in a threadpool and log/track its outcome; re-raises
     InputRejected / any other exception unchanged for the caller to shape
     into an HTTP response and clean up `out`. Does NOT touch the busy lock
@@ -400,7 +409,7 @@ async def _run_pipeline(job: str, paths: dict[str, Path], expert_path: Path | No
     pre-staged-sample runs prepare `paths` differently but both want
     identical behaviour once files exist on disk."""
     try:
-        metadata = await run_in_threadpool(process, job, paths, expert_path, out)
+        metadata = await run_in_threadpool(process, job, paths, expert_path, out, source_mode)
         log.info("job %s: completed in %.1fs", job, metadata["runtime_seconds"])
         return {
             "job_id": job,
@@ -414,6 +423,7 @@ async def _run_pipeline(job: str, paths: dict[str, Path], expert_path: Path | No
             },
             "model": {
                 "name": metadata["model"]["name"],
+                "execution_mode": metadata["model"]["execution_mode"],
                 "checkpoint_hash": metadata.get("model_sha256", "sha256:7a8b9f01c8934bcde10238fa09e451b6801934ef289a01c38e91024bcde59102"),
             },
             "results": {
@@ -600,8 +610,11 @@ async def run_sample(sample_id: str, job: str):
         expert_path = out / "expert.nii.gz"
         shutil.copyfile(expert_src, expert_path)
 
+    sample_entry = next((e for e in _samples_manifest() if e["id"] == sample_id), None)
+    source_mode = sample_entry.get("source") if sample_entry else None
+
     try:
-        return await _run_pipeline(job, paths, expert_path, out)
+        return await _run_pipeline(job, paths, expert_path, out, source_mode=source_mode)
     except InputRejected as exc:
         shutil.rmtree(out, ignore_errors=True)
         first = exc.errors[0] if exc.errors else {"code": "unknown", "sequence": None, "message": "Input rejected"}

@@ -12,6 +12,7 @@ export interface RegionMetric {
   region: string
   dice: number
   sensitivity: number
+  precision?: number
   intersection_voxels: number
   predicted_voxels: number
   expert_voxels: number
@@ -70,9 +71,11 @@ export interface SegmentMetadata {
   has_uncertainty: boolean
   uncertainty_scale: number
   uncertainty: Record<'WT' | 'TC' | 'ET', UncertaintySummary> | null
+  execution_mode?: 'model_inference' | 'heuristic_fallback' | 'synthetic_demo'
   model: {
     name: string; version: string; licence: string; source: string
     deterministic: boolean; tta_passes: number
+    execution_mode?: 'model_inference' | 'heuristic_fallback' | 'synthetic_demo'
   }
   warnings: Finding[]
   input_sha256: Record<string, string>
@@ -154,6 +157,47 @@ export async function listSamples(): Promise<SampleInfo[]> {
     return body.samples ?? []
   } catch {
     return []
+  }
+}
+
+export interface InspectResult {
+  ok: boolean
+  stage: string
+  inference_ready: boolean
+  sequences_received: string[]
+  sequence_metadata: Record<string, { shape: number[]; spacing: number[]; units: string }>
+  geometry: {
+    compatible: boolean
+    shape: number[] | null
+    spacing: number[] | null
+    orientation: string
+  }
+  warnings: Finding[]
+  errors: Finding[]
+}
+
+export async function inspectStudy(files: Partial<Record<'T1' | 'T1Gd' | 'T2' | 'FLAIR' | 'expert', File>>): Promise<InspectResult> {
+  const form = new FormData()
+  if (files.T1) form.append('T1', files.T1)
+  if (files.T1Gd) form.append('T1Gd', files.T1Gd)
+  if (files.T2) form.append('T2', files.T2)
+  if (files.FLAIR) form.append('FLAIR', files.FLAIR)
+  if (files.expert) form.append('expert', files.expert)
+
+  try {
+    const res = await fetch(`${BASE}/api/studies/inspect`, { method: 'POST', body: form })
+    return await res.json()
+  } catch (e) {
+    return {
+      ok: false,
+      stage: 'validation',
+      inference_ready: false,
+      sequences_received: [],
+      sequence_metadata: {},
+      geometry: { compatible: false, shape: null, spacing: null, orientation: 'unknown' },
+      warnings: [],
+      errors: [{ code: 'unreachable', sequence: null, message: 'Cannot reach inspection service at ' + BASE }],
+    }
   }
 }
 

@@ -1,4 +1,14 @@
-import React from 'react'
+import {
+  LayoutDashboard,
+  Box,
+  CheckCircle2,
+  FlaskConical,
+  ShieldCheck,
+  HeartHandshake,
+  GraduationCap,
+  Network,
+  Menu,
+} from 'lucide-react'
 import { useWorkspaceStore, type WorkspaceKey } from '../state/workspaceStore'
 
 interface NavItem {
@@ -7,7 +17,7 @@ interface NavItem {
   label: string
   shortLabel: string
   badge?: string
-  icon: (active: boolean) => React.ReactNode
+  Icon: React.ComponentType<{ className?: string }>
 }
 
 const NAV_ITEMS: NavItem[] = [
@@ -16,14 +26,7 @@ const NAV_ITEMS: NavItem[] = [
     number: '01',
     label: 'Command Centre',
     shortLabel: 'Overview',
-    icon: (active) => (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.2 : 1.8} className="h-4 w-4">
-        <rect x="3" y="3" width="7" height="9" rx="1.5" />
-        <rect x="14" y="3" width="7" height="5" rx="1.5" />
-        <rect x="14" y="12" width="7" height="9" rx="1.5" />
-        <rect x="3" y="16" width="7" height="5" rx="1.5" />
-      </svg>
-    )
+    Icon: LayoutDashboard,
   },
   {
     key: 'viewer',
@@ -31,12 +34,7 @@ const NAV_ITEMS: NavItem[] = [
     label: '3D Studio Viewer',
     shortLabel: '3D Studio',
     badge: '3D',
-    icon: (active) => (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.2 : 1.8} className="h-4 w-4">
-        <path d="M12 3l8 4.5v9L12 21l-8-4.5v-9L12 3z" strokeLinejoin="round" />
-        <path d="M12 12l8-4.5M12 12v9M12 12L4 7.5" strokeLinejoin="round" />
-      </svg>
-    )
+    Icon: Box,
   },
   {
     key: 'review',
@@ -44,12 +42,7 @@ const NAV_ITEMS: NavItem[] = [
     label: 'Segmentation Review',
     shortLabel: 'Review',
     badge: 'QC',
-    icon: (active) => (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.2 : 1.8} className="h-4 w-4">
-        <circle cx="12" cy="12" r="9" />
-        <path d="M9 12l2 2 4-4" strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
-    )
+    Icon: CheckCircle2,
   },
   {
     key: 'research',
@@ -57,11 +50,7 @@ const NAV_ITEMS: NavItem[] = [
     label: 'Research Lab',
     shortLabel: 'Cohort',
     badge: '10 Cases',
-    icon: (active) => (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.2 : 1.8} className="h-4 w-4">
-        <path d="M6 3v12a4 4 0 008 0V3M4 3h12M10 15v6M7 21h6" strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
-    )
+    Icon: FlaskConical,
   },
   {
     key: 'trust',
@@ -69,12 +58,7 @@ const NAV_ITEMS: NavItem[] = [
     label: 'Trust & Explainability',
     shortLabel: 'Trust',
     badge: 'Flip-TTA',
-    icon: (active) => (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.2 : 1.8} className="h-4 w-4">
-        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" strokeLinejoin="round" />
-        <circle cx="12" cy="11" r="2.5" />
-      </svg>
-    )
+    Icon: ShieldCheck,
   },
   {
     key: 'patient',
@@ -82,39 +66,23 @@ const NAV_ITEMS: NavItem[] = [
     label: 'Patient Companion',
     shortLabel: 'Patient',
     badge: 'Clear',
-    icon: (active) => (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.2 : 1.8} className="h-4 w-4">
-        <path d="M19 21v-2a4 4 0 00-4-4H9a4 4 0 00-4 4v2" />
-        <circle cx="12" cy="7" r="4" />
-      </svg>
-    )
+    Icon: HeartHandshake,
   },
   {
     key: 'learn',
     number: '07',
     label: 'NeuroLearn Academy',
     shortLabel: 'Learn',
-    icon: (active) => (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.2 : 1.8} className="h-4 w-4">
-        <path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2zM22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z" />
-      </svg>
-    )
+    Icon: GraduationCap,
   },
   {
     key: 'graph',
-    number: '★',
+    number: '08',
     label: 'Research Graph',
     shortLabel: 'Graph',
     badge: 'DAG',
-    icon: (active) => (
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.2 : 1.8} className="h-4 w-4">
-        <circle cx="6" cy="6" r="3" />
-        <circle cx="18" cy="6" r="3" />
-        <circle cx="12" cy="18" r="3" />
-        <path d="M8.5 7.5l7 7M15.5 7.5l-7 7M6 9v6" strokeLinecap="round" />
-      </svg>
-    )
-  }
+    Icon: Network,
+  },
 ]
 
 export default function NavigationSidebar() {
@@ -165,7 +133,7 @@ export default function NavigationSidebar() {
                     : 'text-slate-500 group-hover:text-slate-300'
                 }`}
               >
-                {item.icon(isActive)}
+                <item.Icon className="h-4 w-4" />
               </span>
 
               <span className="truncate">{item.label}</span>

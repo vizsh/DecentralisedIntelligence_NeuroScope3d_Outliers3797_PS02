@@ -7,25 +7,35 @@
 
 export type Slot = 'T1' | 'T1Gd' | 'T2' | 'FLAIR' | 'expert'
 
-// Order matters: contrast and FLAIR variants are checked before the bare
-// t1/t2 fallback, since "t1ce"/"t1gd"/"t1c" and "t2f" all contain "t1"/"t2"
-// as a substring — checking the generic pattern first would misroute them.
-const PATTERNS: { slot: Slot; re: RegExp }[] = [
+export type ImportProfile = 'standard' | 'synapse' | 'decathlon'
+
+// Standard anatomical naming conventions
+const STANDARD_PATTERNS: { slot: Slot; re: RegExp }[] = [
   { slot: 'expert', re: /(^|[_\-.])(seg|label|mask|gt|groundtruth|ground-truth)([_\-.]|$)/i },
   { slot: 'T1Gd', re: /(^|[_\-.])t1\s*(ce|gd|c|post|\+c)([_\-.]|$)/i },
   { slot: 'T1Gd', re: /t1[\s_-]?gad|post[\s_-]?contrast|contrast[\s_-]?enhanc/i },
-  { slot: 'T1Gd', re: /[_\-.]0002([_\-.]|$)/i }, // BraTS Synapse convention: 0002 = T1ce
   { slot: 'FLAIR', re: /(^|[_\-.])(flair|t2f)([_\-.]|$)/i },
-  { slot: 'FLAIR', re: /[_\-.]0000([_\-.]|$)/i }, // BraTS Synapse convention: 0000 = FLAIR
   { slot: 'T2', re: /(^|[_\-.])(t2w?)([_\-.]|$)/i },
-  { slot: 'T2', re: /[_\-.]0003([_\-.]|$)/i }, // BraTS Synapse convention: 0003 = T2
   { slot: 'T1', re: /(^|[_\-.])(t1w?|t1n)([_\-.]|$)/i },
-  { slot: 'T1', re: /[_\-.]0001([_\-.]|$)/i }, // BraTS Synapse convention: 0001 = T1
 ]
 
-export function detectSlot(filename: string): Slot | null {
+// BraTS Synapse / nnU-Net numeric suffixes (_0000=FLAIR, _0001=T1, _0002=T1ce, _0003=T2)
+const SYNAPSE_PATTERNS: { slot: Slot; re: RegExp }[] = [
+  { slot: 'expert', re: /(^|[_\-.])(seg|label|mask|gt)([_\-.]|$)/i },
+  { slot: 'FLAIR', re: /[_\-.]0000([_\-.]|$)/i },
+  { slot: 'T1', re: /[_\-.]0001([_\-.]|$)/i },
+  { slot: 'T1Gd', re: /[_\-.]0002([_\-.]|$)/i },
+  { slot: 'T2', re: /[_\-.]0003([_\-.]|$)/i },
+]
+
+export function detectSlot(filename: string, profile: ImportProfile = 'standard'): Slot | null {
   const name = filename.toLowerCase()
-  for (const { slot, re } of PATTERNS) {
+  if (profile === 'synapse') {
+    for (const { slot, re } of SYNAPSE_PATTERNS) {
+      if (re.test(name)) return slot
+    }
+  }
+  for (const { slot, re } of STANDARD_PATTERNS) {
     if (re.test(name)) return slot
   }
   return null
@@ -35,12 +45,15 @@ export function detectSlot(filename: string): Slot | null {
  * First match wins within the batch; anything undetected or colliding with
  * an already-filled slot comes back as `unmatched` so the UI can say so
  * instead of silently dropping it. */
-export function autoSortFiles(files: File[]): { assigned: Partial<Record<Slot, File>>; unmatched: File[] } {
+export function autoSortFiles(
+  files: File[],
+  profile: ImportProfile = 'standard',
+): { assigned: Partial<Record<Slot, File>>; unmatched: File[] } {
   const assigned: Partial<Record<Slot, File>> = {}
   const unmatched: File[] = []
 
   for (const file of files) {
-    const slot = detectSlot(file.name)
+    const slot = detectSlot(file.name, profile)
     if (slot && !assigned[slot]) {
       assigned[slot] = file
     } else {
@@ -49,3 +62,4 @@ export function autoSortFiles(files: File[]): { assigned: Partial<Record<Slot, F
   }
   return { assigned, unmatched }
 }
+
