@@ -129,15 +129,22 @@ real-world input.
 - **Config via one settings object**, not scattered `os.environ.get` calls
   across `server/main.py`. Low risk, but worth doing before this file grows
   further.
-- **A real pytest suite** wrapping `neuroscope/validate.py` and
-  `neuroscope/regions.py` as unit tests (pure functions, cheap to test in
-  isolation), so a future change to a validation threshold or the Dice
-  formula is caught by `pytest` in CI rather than only by the slower,
-  end-to-end `run_judge_tests.py`.
-- **Concurrency behaviour under load.** The single global `busy` lock is
-  correct for "one study at a time" but gives no queue or position feedback
-  to a second uploader — fine for a judge slot, worth a status message if
-  this gets used by more than one person at once.
+- ~~A real pytest suite~~ — **done**: `backend/tests/` wraps `validate.py`,
+  `regions.py`, `model_base.py`, the pre-flight `/api/studies/inspect`
+  endpoint, and the job queue (42 tests total) as fast unit tests, so a
+  future change to a validation threshold or the Dice formula is caught
+  immediately rather than only by the slower, end-to-end
+  `run_judge_tests.py`.
+- ~~Wired into CI~~ — **done**: `.github/workflows/ci.yml` runs the pytest
+  suite and `run_judge_tests.py --model heuristic` (the real checkpoint is
+  deliberately excluded from CI — too slow/heavy to fetch on every push;
+  run it locally before a release) on every push and PR, plus a frontend
+  `tsc --noEmit` + `vite build`.
+- ~~Concurrency behaviour under load~~ — **done**: the single global `busy`
+  lock now has a real FIFO queue in front of it (`server/main.py`'s
+  `wait_for_slot`) — a second uploader gets a live queue position and a
+  measured-average ETA via `/api/jobs/{id}/status`, not a bare "busy, try
+  again" rejection. See `backend/tests/test_queue.py`.
 
 ## Phase 3 — the actual differentiation (from the landscape research)
 
