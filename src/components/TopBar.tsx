@@ -1,4 +1,4 @@
-import { reportUrl } from '../lib/api'
+import { exportBundleUrl, reportUrl } from '../lib/api'
 import { useLiveStudy } from '../state/liveStudy'
 import { useStudyOptional } from '../state/study'
 import { useStore } from '../state/store'
@@ -114,6 +114,15 @@ export default function TopBar() {
           className="rounded border border-edge px-2.5 py-1 text-[11px] text-slate-300 transition hover:border-slate-500 hover:text-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
         >
           Report
+        </button>
+
+        <button
+          onClick={() => bundle?.mode === 'live' && bundle.jobId && window.open(exportBundleUrl(bundle.jobId), '_blank')}
+          disabled={bundle?.mode !== 'live'}
+          title={bundle?.mode === 'live' ? 'Download report + metadata + prediction NIfTI as a zip' : 'Upload or run a real case to export it'}
+          className="rounded border border-edge px-2.5 py-1 text-[11px] text-slate-300 transition hover:border-slate-500 hover:text-slate-100 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          Export
         </button>
 
         <span

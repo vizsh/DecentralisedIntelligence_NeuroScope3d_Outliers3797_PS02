@@ -261,6 +261,7 @@ export const fetchUncertainty = (jobId: string, region: 'WT' | 'TC' | 'ET') =>
 export const fetchExpertLabels = (jobId: string) => fetchBytes(`/api/jobs/${jobId}/expert-labels`)
 
 export const reportUrl = (jobId: string) => `${BASE}/api/jobs/${jobId}/report`
+export const exportBundleUrl = (jobId: string) => `${BASE}/api/jobs/${jobId}/export`
 
 export interface ModelStatus {
   status: 'ready' | 'fallback'

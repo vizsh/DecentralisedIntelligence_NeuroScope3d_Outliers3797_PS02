@@ -13,19 +13,21 @@ import asyncio
 import contextlib
 import datetime
 import html
+import io
 import json
 import logging
 import shutil
 import sys
 import threading
 import time
+import zipfile
 from pathlib import Path
 
 import nibabel as nib
 import numpy as np
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
 
@@ -858,6 +860,51 @@ def prediction(job: str):
 @app.get("/api/jobs/{job}/report")
 def report(job: str):
     return FileResponse(_jobdir(job) / "report.html", media_type="text/html")
+
+
+@app.get("/api/jobs/{job}/export")
+def export_bundle(job: str):
+    """A single-click "take this case with you" download — the provenance report,
+    the raw metadata, and the original-grid prediction NIfTI, zipped. Built for the
+    real teaching-hospital workflow this platform is scoped around (archive a case,
+    hand it to a colleague, bring it to a tumour board) where the artifacts already
+    exist on disk but there was previously no single file to leave with.
+
+    Deliberately excludes the display-grid .bin payloads (uncertainty/labels/volume
+    data resampled for the browser's own renderer) — those aren't a standard format
+    and aren't useful outside this app; prediction.nii.gz is the real, portable
+    result any NIfTI-capable viewer can open. The original uploaded sequences and
+    expert mask are not included because they are deleted immediately once a result
+    exists (see README's Data handling) — the export can only ever contain what this
+    platform still has, never a copy of something it already discarded."""
+    path = _jobdir(job)
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        zf.write(path / "metadata.json", "metadata.json")
+        zf.write(path / "report.html", "report.html")
+        if (path / "prediction.nii.gz").exists():
+            zf.write(path / "prediction.nii.gz", "prediction.nii.gz")
+        zf.writestr(
+            "README.txt",
+            "NeuroScope 3D case export — research and teaching prototype only.\n"
+            "Suspected tumour regions predicted by the model. Estimated volumes only.\n"
+            "Never a diagnosis, never a substitute for a radiologist.\n\n"
+            f"Job id: {job}\n"
+            "Contents:\n"
+            "  report.html      — the printable provenance report\n"
+            "  metadata.json    — the full structured result (volumes, Dice/HD95 if an\n"
+            "                     expert mask was provided, uncertainty, validation warnings,\n"
+            "                     model and input provenance)\n"
+            "  prediction.nii.gz — the predicted label map, on the original input grid\n"
+            "                     and affine, openable in any NIfTI-capable viewer\n",
+        )
+    buf.seek(0)
+    log.info("job %s: exported case bundle", job)
+    return StreamingResponse(
+        buf,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="neuroscope3d_case_{job[:8]}.zip"'},
+    )
 
 
 def _report_html(m: dict) -> str:
