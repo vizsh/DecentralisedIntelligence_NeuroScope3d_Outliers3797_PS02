@@ -75,6 +75,46 @@ export interface RegionReport {
   fractionOfBrain: number
 }
 
+export interface MaskDiffSide {
+  count: number
+  volumeML: number
+  /** voxel-index centroid of this side's voxels; null if there are none */
+  centroid: Vec3 | null
+}
+
+/** Where the model and the expert mask disagree for one region, computed
+ *  directly from the two label masks — real per-case geometry, not a
+ *  canned example. `fp` = model flagged tumour the expert didn't (over-call),
+ *  `fn` = the expert flagged tumour the model missed (under-call). */
+export function diffStats(
+  predicted: Uint8Array, expert: Uint8Array, dims: Vec3, spacing: Vec3,
+): { fp: MaskDiffSide; fn: MaskDiffSide } {
+  const [nx, ny, nz] = dims
+  let fpN = 0, fpX = 0, fpY = 0, fpZ = 0
+  let fnN = 0, fnX = 0, fnY = 0, fnZ = 0
+  for (let k = 0; k < nz; k++) {
+    for (let j = 0; j < ny; j++) {
+      const row = nx * (j + ny * k)
+      for (let i = 0; i < nx; i++) {
+        const idx = row + i
+        const p = predicted[idx], e = expert[idx]
+        if (p && !e) { fpN++; fpX += i; fpY += j; fpZ += k }
+        else if (!p && e) { fnN++; fnX += i; fnY += j; fnZ += k }
+      }
+    }
+  }
+  return {
+    fp: {
+      count: fpN, volumeML: volumeML(fpN, spacing),
+      centroid: fpN ? [Math.round(fpX / fpN), Math.round(fpY / fpN), Math.round(fpZ / fpN)] : null,
+    },
+    fn: {
+      count: fnN, volumeML: volumeML(fnN, spacing),
+      centroid: fnN ? [Math.round(fnX / fnN), Math.round(fnY / fnN), Math.round(fnZ / fnN)] : null,
+    },
+  }
+}
+
 export function buildReport(
   predicted: Uint8Array, expert: Uint8Array, brainVoxels: number, spacing: Vec3,
 ): Record<RegionKey, RegionReport> {

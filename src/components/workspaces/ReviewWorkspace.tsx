@@ -1,12 +1,20 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
+import { diffStats, REGIONS } from '../../lib/regions'
 import { useStore } from '../../state/store'
 import { useStudyOptional } from '../../state/study'
 import {
   useWorkspaceStore,
   type ErrorCategory,
-  type ReviewDisposition,
-  type FlaggedCluster
+  type ReviewDisposition
 } from '../../state/workspaceStore'
+
+interface DiffCluster {
+  id: string
+  region: 'WT' | 'TC' | 'ET'
+  type: 'FP' | 'FN'
+  volumeMl: number
+  voxel: [number, number, number]
+}
 
 const COMPARISON_MODES = [
   { id: 'disagreement', label: 'Disagreement Map (TP/FP/FN)', desc: 'Green: Agreement, Amber: Model Only (FP), Red: Expert Only (FN)' },
@@ -38,7 +46,6 @@ export default function ReviewWorkspace() {
   const setReviewDisposition = useWorkspaceStore((s) => s.setReviewDisposition)
   const setReviewNotes = useWorkspaceStore((s) => s.setReviewNotes)
   const setReviewCategory = useWorkspaceStore((s) => s.setReviewCategory)
-  const addFlaggedCluster = useWorkspaceStore((s) => s.addFlaggedCluster)
   const setActiveWorkspace = useWorkspaceStore((s) => s.setActiveWorkspace)
 
   const caseKey = (bundle?.study.caseId || selectedStudyId).toLowerCase()
@@ -60,36 +67,27 @@ export default function ReviewWorkspace() {
     setTimeout(() => setSaveStatus(null), 2500)
   }
 
-  // Sample error clusters for review investigation
-  const errorClusters: FlaggedCluster[] = [
-    {
-      id: 'cluster-1',
-      label: 'Medial boundary false-negative gap',
-      region: 'ET',
-      voxel: [84, 112, 78],
-      volumeMl: 1.57,
-      type: 'FN',
-      note: 'Model omitted narrow enhancing margin near ventricle'
-    },
-    {
-      id: 'cluster-2',
-      label: 'Posterior edema false-positive island',
-      region: 'WT',
-      voxel: [98, 88, 92],
-      volumeMl: 2.14,
-      type: 'FP',
-      note: 'Elevated T2 hyperintensity captured as edema'
-    },
-    {
-      id: 'cluster-3',
-      label: 'Satellite core concordance check',
-      region: 'TC',
-      voxel: [76, 102, 85],
-      volumeMl: 0.82,
-      type: 'FN',
-      note: 'Isolated rater island not joined to main core'
+  // Real disagreement regions, computed directly from this case's own predicted
+  // vs. expert masks (lib/regions.ts's diffStats) — recomputed per case, not a
+  // fixed example. FP = model flagged tumour the expert didn't; FN = the
+  // expert flagged tumour the model missed. Capped to the 6 largest so the
+  // list stays a triage queue, not a full voxel dump.
+  const errorClusters: DiffCluster[] = useMemo(() => {
+    if (!bundle) return []
+    const out: DiffCluster[] = []
+    for (const def of REGIONS) {
+      const { fp, fn } = diffStats(
+        bundle.masks.predicted[def.key], bundle.masks.expert[def.key], bundle.study.dims, bundle.study.spacing,
+      )
+      if (fp.centroid && fp.volumeML > 0) {
+        out.push({ id: `${def.key}-fp`, region: def.key, type: 'FP', volumeMl: fp.volumeML, voxel: fp.centroid })
+      }
+      if (fn.centroid && fn.volumeML > 0) {
+        out.push({ id: `${def.key}-fn`, region: def.key, type: 'FN', volumeMl: fn.volumeML, voxel: fn.centroid })
+      }
     }
-  ]
+    return out.sort((a, b) => b.volumeMl - a.volumeMl).slice(0, 6)
+  }, [bundle])
 
   return (
     <div className="flex h-full flex-col overflow-y-auto p-4 space-y-4 bg-ink text-slate-200">
@@ -197,6 +195,35 @@ export default function ReviewWorkspace() {
               </div>
             </div>
           </div>
+
+          {/* Real per-region TP/FP/FN proportions, from this case's own metrics */}
+          {bundle && (
+            <div className="rounded-lg border border-edge bg-panel/60 p-4 space-y-3">
+              <h2 className="text-[13px] font-semibold text-slate-100">Agreement by Region</h2>
+              <div className="space-y-2.5">
+                {REGIONS.map((def) => {
+                  const m = bundle.report[def.key].metric
+                  const fp = m.predicted - m.intersection
+                  const fn = m.expert - m.intersection
+                  const total = m.intersection + fp + fn
+                  const pct = (n: number) => (total > 0 ? (n / total) * 100 : 0)
+                  return (
+                    <div key={def.key} className="space-y-1">
+                      <div className="flex items-center justify-between font-mono text-[10px]">
+                        <span className="text-slate-300">{def.key}</span>
+                        <span className="text-slate-500">Dice {m.dice.toFixed(3)}</span>
+                      </div>
+                      <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-slate-800">
+                        <div className="h-full bg-emerald-400" style={{ width: `${pct(m.intersection)}%` }} title={`TP: ${m.intersection} voxels`} />
+                        <div className="h-full bg-amber-400" style={{ width: `${pct(fp)}%` }} title={`FP: ${fp} voxels`} />
+                        <div className="h-full bg-rose-400" style={{ width: `${pct(fn)}%` }} title={`FN: ${fn} voxels`} />
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Center Column: Error Cluster Explorer (1 Col) */}
@@ -204,19 +231,26 @@ export default function ReviewWorkspace() {
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-[13px] font-semibold text-slate-100">Detected Error Clusters</h2>
-              <p className="text-[10px] text-slate-500">Connected component analysis of false positive / negative regions</p>
+              <p className="text-[10px] text-slate-500">Computed live from this case's own predicted-vs-expert masks</p>
             </div>
-            <span className="font-mono text-[10px] text-slate-400">3 Clusters</span>
+            <span className="font-mono text-[10px] text-slate-400">{errorClusters.length} region{errorClusters.length === 1 ? '' : 's'}</span>
           </div>
 
           <div className="space-y-2.5">
+            {errorClusters.length === 0 && (
+              <p className="text-[11px] text-slate-500">
+                {bundle?.report[REGIONS[0].key]?.expertVoxels ? 'Model and expert masks agree everywhere — no disagreement regions.' : 'No expert mask on this case to compare against.'}
+              </p>
+            )}
             {errorClusters.map((cluster) => (
               <div
                 key={cluster.id}
                 className="rounded-md border border-edge bg-panel-2/60 p-3 space-y-2 hover:border-slate-500 transition-colors"
               >
                 <div className="flex items-center justify-between">
-                  <span className="font-semibold text-[11.5px] text-slate-200">{cluster.label}</span>
+                  <span className="font-semibold text-[11.5px] text-slate-200">
+                    {cluster.region} {cluster.type === 'FP' ? 'false positive — model only' : 'false negative — expert only'}
+                  </span>
                   <span
                     className={`rounded px-1.5 py-0.5 font-mono text-[9px] font-bold ${
                       cluster.type === 'FN'
@@ -228,11 +262,15 @@ export default function ReviewWorkspace() {
                   </span>
                 </div>
 
-                <p className="text-[10.5px] text-slate-400 leading-relaxed">{cluster.note}</p>
+                <p className="text-[10.5px] text-slate-400 leading-relaxed">
+                  {cluster.type === 'FP'
+                    ? 'Model predicted tumour here; the expert mask does not.'
+                    : 'Expert mask marks tumour here; the model did not predict it.'}
+                </p>
 
                 <div className="flex items-center justify-between border-t border-edge/60 pt-2 font-mono text-[9.5px]">
                   <span className="text-slate-500">
-                    Volume: <strong className="text-slate-300">{cluster.volumeMl.toFixed(2)} mL</strong> · Coords: [{cluster.voxel.join(', ')}]
+                    Volume: <strong className="text-slate-300">{cluster.volumeMl.toFixed(2)} mL</strong> · Centroid voxel: [{cluster.voxel.join(', ')}]
                   </span>
                   <button
                     onClick={() => {
