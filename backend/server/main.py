@@ -110,6 +110,7 @@ def report_stage(job: str, stage: str, **extra) -> None:
 _queue_lock = threading.Lock()
 _queue: list[str] = []
 _recent_runtimes: list[float] = []
+_RUNTIME_WINDOW = 50  # big enough for a meaningful P50/P95 in /api/metrics, small enough to stay cheap
 _DEFAULT_ETA_SECONDS = 90.0  # matches this project's own measured real-model timing until data exists
 _MAX_QUEUE_LENGTH = 10  # a sane cap for a single local workstation, not a public multi-tenant service
 
@@ -117,7 +118,27 @@ _MAX_QUEUE_LENGTH = 10  # a sane cap for a single local workstation, not a publi
 def _record_runtime(seconds: float) -> None:
     with _queue_lock:
         _recent_runtimes.append(seconds)
-        del _recent_runtimes[:-10]
+        del _recent_runtimes[:-_RUNTIME_WINDOW]
+
+
+# ------------------------------------------------------------------ observability
+# No claim ships without a reproducible run behind it — the same discipline applied
+# to every accuracy figure in docs/VERIFICATION.md applies here: "the pipeline is
+# reliable" should be a number from this endpoint, not an anecdote.
+_metrics_lock = threading.Lock()
+_metrics = {"jobs_completed": 0, "jobs_errored": 0, "jobs_rejected_by_code": {}}
+_SERVER_STARTED_AT = time.time()
+
+
+def _record_outcome(outcome: str, code: str | None = None) -> None:
+    with _metrics_lock:
+        if outcome == "completed":
+            _metrics["jobs_completed"] += 1
+        elif outcome == "errored":
+            _metrics["jobs_errored"] += 1
+        elif outcome == "rejected":
+            by_code = _metrics["jobs_rejected_by_code"]
+            by_code[code] = by_code.get(code, 0) + 1
 
 
 def _estimate_job_seconds() -> float:
@@ -271,6 +292,42 @@ def health():
         "model_name": model_name,
         "disclaimer": DISCLAIMER,
         "version": __version__,
+    }
+
+
+@app.get("/api/metrics")
+def metrics():
+    """Real, measured numbers — job outcomes and inference timing — rather than an
+    anecdote about reliability. Crude by design (no Prometheus, no time-series
+    storage): in-memory counters are honest about this being a single local
+    workstation process, not a production service with a metrics backend. Restarts
+    reset everything, which the uptime field makes obvious rather than hiding."""
+    with _metrics_lock:
+        completed = _metrics["jobs_completed"]
+        errored = _metrics["jobs_errored"]
+        rejected_by_code = dict(_metrics["jobs_rejected_by_code"])
+    with _queue_lock:
+        runtimes = sorted(_recent_runtimes)
+        queue_length = len(_queue)
+
+    def _percentile(p: float) -> float | None:
+        if not runtimes:
+            return None
+        idx = min(len(runtimes) - 1, int(len(runtimes) * p))
+        return round(runtimes[idx], 1)
+
+    return {
+        "uptime_seconds": round(time.time() - _SERVER_STARTED_AT, 1),
+        "jobs_completed": completed,
+        "jobs_errored": errored,
+        "jobs_rejected_total": sum(rejected_by_code.values()),
+        "jobs_rejected_by_code": rejected_by_code,
+        "jobs_total": completed + errored + sum(rejected_by_code.values()),
+        "inference_seconds_p50": _percentile(0.5),
+        "inference_seconds_p95": _percentile(0.95),
+        "inference_seconds_sample_count": len(runtimes),
+        "inference_seconds_window": _RUNTIME_WINDOW,
+        "queue_length_now": queue_length,
     }
 
 
@@ -574,6 +631,7 @@ async def _run_pipeline(job: str, paths: dict[str, Path], expert_path: Path | No
         checkpoint_hash = metadata["model"].get("checkpoint_sha256")
         if metadata["model"]["execution_mode"] == "model_inference" and not checkpoint_hash:
             raise RuntimeError("Model checkpoint hash missing for verified model inference.")
+        _record_outcome("completed")
         return {
             "job_id": job,
             "study_id": job,
@@ -605,11 +663,13 @@ async def _run_pipeline(job: str, paths: dict[str, Path], expert_path: Path | No
         with _progress_lock:
             PROGRESS.pop(job, None)
         log.info("job %s: rejected — %s", job, "; ".join(e["message"] for e in exc.errors))
+        _record_outcome("rejected", exc.errors[0]["code"] if exc.errors else "unknown")
         raise
     except Exception:
         with _progress_lock:
             PROGRESS.pop(job, None)
         log.exception("job %s: processing failed", job)
+        _record_outcome("errored")
         raise
 
 

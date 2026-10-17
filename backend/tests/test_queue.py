@@ -109,7 +109,9 @@ def test_estimate_job_seconds_defaults_until_a_real_runtime_is_recorded():
 
 
 def test_record_runtime_keeps_only_a_rolling_window():
-    for seconds in range(1, 20):  # 19 values, window keeps the last 10
+    window = server_main._RUNTIME_WINDOW
+    total = window + 9
+    for seconds in range(1, total + 1):
         server_main._record_runtime(float(seconds))
-    assert len(server_main._recent_runtimes) == 10
-    assert server_main._recent_runtimes == [float(n) for n in range(10, 20)]
+    assert len(server_main._recent_runtimes) == window
+    assert server_main._recent_runtimes == [float(n) for n in range(total - window + 1, total + 1)]
