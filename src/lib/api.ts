@@ -205,6 +205,53 @@ export async function inspectStudy(files: Partial<Record<'T1' | 'T1Gd' | 'T2' | 
   }
 }
 
+export interface DicomSeriesMeta {
+  series_uid: string
+  series_description: string
+  modality: string
+  detected_sequence: string | null
+  slice_count: number
+  shape: number[]
+  spacing_mm: number[]
+  patient_deidentified: boolean
+}
+
+export interface DicomInspectResult {
+  ok: boolean
+  series_count: number
+  deidentified: boolean
+  has_required_sequences: boolean
+  auto_mapped: Record<string, string>
+  series: DicomSeriesMeta[]
+  warnings: Finding[]
+  message?: string
+}
+
+export async function inspectDicomStudy(files: File[] | File): Promise<DicomInspectResult> {
+  const form = new FormData()
+  if (Array.isArray(files)) {
+    for (const f of files) form.append('files', f)
+  } else {
+    form.append('files', files)
+  }
+  try {
+    const res = await fetch(`${BASE}/api/v1/studies/inspect-dicom`, { method: 'POST', body: form })
+    return await res.json()
+  } catch {
+    return {
+      ok: false,
+      series_count: 0,
+      deidentified: false,
+      has_required_sequences: false,
+      auto_mapped: {},
+      series: [],
+      warnings: [{ code: 'unreachable', sequence: null, message: 'Cannot reach DICOM inspection service at ' + BASE }],
+      message: 'Network error connecting to local server.',
+    }
+  }
+}
+
+
 export async function runSample(sampleId: string, jobId: string): Promise<SegmentResult> {
   let res: Response
   try {

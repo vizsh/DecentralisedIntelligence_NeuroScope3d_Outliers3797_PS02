@@ -178,7 +178,24 @@ export default function UploadPanel() {
   const [importProfile, setImportProfile] = useState<ImportProfile>('standard')
   const [preflight, setPreflight] = useState<api.InspectResult | null>(null)
   const [inspecting, setInspecting] = useState(false)
+  const [ingestionTab, setIngestionTab] = useState<'nifti' | 'dicom'>('nifti')
+  const [dicomResult, setDicomResult] = useState<api.DicomInspectResult | null>(null)
+  const [dicomLoading, setDicomLoading] = useState(false)
+  const [dicomFiles, setDicomFiles] = useState<File[]>([])
+  const [dicomOver, setDicomOver] = useState(false)
   const checkedOnce = useRef(false)
+
+  const handleDicomUpload = async (picked: File[]) => {
+    if (picked.length === 0) return
+    setDicomFiles(picked)
+    setDicomLoading(true)
+    try {
+      const res = await api.inspectDicomStudy(picked)
+      setDicomResult(res)
+    } finally {
+      setDicomLoading(false)
+    }
+  }
 
   const applyAutoSort = (picked: File[]) => {
     const { assigned, unmatched: rest } = autoSortFiles(picked, importProfile)
@@ -317,103 +334,252 @@ export default function UploadPanel() {
           </div>
         )}
 
-        {/* Import Profile Selector */}
-        <div className="mb-3 flex items-center justify-between rounded-md border border-edge/80 bg-panel-2/60 px-3 py-2 text-[11px]">
-          <div className="flex items-center gap-2">
-            <span className="font-mono text-slate-400">Dataset Profile:</span>
-            <span className="text-[10px] text-slate-500">Determines regex heuristics for batch drag & drop</span>
-          </div>
-          <select
-            value={importProfile}
-            onChange={(e) => setImportProfile(e.target.value as ImportProfile)}
-            className="rounded border border-edge bg-panel px-2.5 py-1 font-mono text-[10.5px] text-slate-200 focus:border-sky-500 focus:outline-none"
+        {/* Ingestion Mode Tabs */}
+        <div className="mb-3 flex border-b border-edge/60">
+          <button
+            onClick={() => setIngestionTab('nifti')}
+            className={`flex items-center gap-1.5 border-b-2 px-3 py-1.5 font-mono text-[11px] font-medium transition ${
+              ingestionTab === 'nifti'
+                ? 'border-sky-400 text-sky-300'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
           >
-            <option value="standard">Standard Modality Names (T1, T1Gd, T2, FLAIR)</option>
-            <option value="synapse">BraTS Synapse / nnU-Net (_0000 to _0003)</option>
-            <option value="decathlon">Decathlon Task01 (4D split)</option>
-          </select>
-        </div>
-
-        {/* Bulk Dropzone */}
-        <label
-          onDragOver={(e) => {
-            e.preventDefault()
-            setBulkOver(true)
-          }}
-          onDragLeave={() => setBulkOver(false)}
-          onDrop={(e) => {
-            e.preventDefault()
-            setBulkOver(false)
-            applyAutoSort(Array.from(e.dataTransfer.files ?? []))
-          }}
-          className={`mb-3 flex cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed p-3.5 text-center transition ${
-            bulkOver
-              ? 'border-sky-400 bg-sky-500/15'
-              : 'border-edge/80 bg-panel-2/30 hover:border-slate-500 hover:bg-panel-2/60'
-          }`}
-        >
-          <input
-            type="file"
-            multiple
-            accept=".nii,.gz"
-            className="hidden"
-            onChange={(e) => {
-              applyAutoSort(Array.from(e.target.files ?? []))
-              e.target.value = ''
-            }}
-          />
-          <div className="flex items-center gap-2">
-            <FileCheck className="h-4 w-4 text-sky-400" />
-            <span className="font-mono text-[11px] font-medium text-slate-300">
-              Drag all four sequence files here at once
+            <Layers className="h-3.5 w-3.5" />
+            NIfTI Sequences (.nii, .nii.gz)
+          </button>
+          <button
+            onClick={() => setIngestionTab('dicom')}
+            className={`flex items-center gap-1.5 border-b-2 px-3 py-1.5 font-mono text-[11px] font-medium transition ${
+              ingestionTab === 'dicom'
+                ? 'border-sky-400 text-sky-300'
+                : 'border-transparent text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <HardDrive className="h-3.5 w-3.5" />
+            DICOM Study (.dcm, .zip)
+            <span className="rounded bg-sky-500/20 px-1 py-0.5 text-[8.5px] font-bold text-sky-300">
+              NEW
             </span>
-          </div>
-          <span className="font-mono text-[9.5px] text-slate-500">
-            Files will be auto-sorted into slots based on the active dataset profile ({importProfile})
-          </span>
-        </label>
+          </button>
+        </div>
 
-        {unmatched.length > 0 && (
-          <div className="mb-3 rounded-md border border-amber-600/40 bg-amber-500/10 px-3 py-2 font-mono text-[10px] text-amber-300">
-            Ambiguous naming for: {unmatched.join(', ')} — please place manually in the slot boxes below.
-          </div>
-        )}
-
-        {/* Four Sequence Slots Grid */}
-        <div className="grid grid-cols-2 gap-2.5">
-          {REQUIRED.map((r) => (
-            <Dropzone
-              key={r.key}
-              slot={r.key}
-              label={r.label}
-              hint={r.hint}
-              file={files[r.key]}
-              onPick={(f) => {
-                setFiles((s) => ({ ...s, [r.key]: f }))
-                setPreflight(null)
+        {ingestionTab === 'dicom' ? (
+          <div className="space-y-3">
+            {/* DICOM Archive / Slices Dropzone */}
+            <label
+              onDragOver={(e) => {
+                e.preventDefault()
+                setDicomOver(true)
               }}
-              onReassign={(newSlot) => handleReassign(r.key, newSlot)}
-              detectedMeta={preflight?.sequence_metadata?.[r.key]}
-            />
-          ))}
-        </div>
+              onDragLeave={() => setDicomOver(false)}
+              onDrop={(e) => {
+                e.preventDefault()
+                setDicomOver(false)
+                handleDicomUpload(Array.from(e.dataTransfer.files ?? []))
+              }}
+              className={`flex cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed p-4 text-center transition ${
+                dicomOver
+                  ? 'border-sky-400 bg-sky-500/15'
+                  : 'border-edge/80 bg-panel-2/30 hover:border-slate-500 hover:bg-panel-2/60'
+              }`}
+            >
+              <input
+                type="file"
+                multiple
+                accept=".dcm,.zip"
+                className="hidden"
+                onChange={(e) => {
+                  handleDicomUpload(Array.from(e.target.files ?? []))
+                  e.target.value = ''
+                }}
+              />
+              <div className="flex items-center gap-2">
+                <HardDrive className="h-4 w-4 text-sky-400" />
+                <span className="font-mono text-[11px] font-medium text-slate-300">
+                  Drop DICOM Study Archive (.zip) or Slice Files (.dcm)
+                </span>
+              </div>
+              <span className="font-mono text-[9.5px] text-slate-500">
+                Extracts SeriesInstanceUID, auto-detects T1/T1Gd/T2/FLAIR, validates spacing along slice normal
+              </span>
+            </label>
 
-        {/* Optional Expert Mask */}
-        <div className="mt-2.5">
-          <Dropzone
-            slot="expert"
-            label="Expert Reference Mask"
-            hint="Ground truth labels (NCR=1, ED=2, ET=4) for segmentation validation"
-            file={files.expert}
-            onPick={(f) => {
-              setFiles((s) => ({ ...s, expert: f }))
-              setPreflight(null)
-            }}
-            onReassign={(newSlot) => handleReassign('expert', newSlot)}
-            optional
-            detectedMeta={preflight?.sequence_metadata?.expert}
-          />
-        </div>
+            {dicomLoading && (
+              <div className="flex items-center justify-center gap-2 rounded-md border border-edge bg-panel-2/50 py-3 font-mono text-[11px] text-slate-300">
+                <RefreshCw className="h-4 w-4 animate-spin text-sky-400" />
+                <span>Parsing DICOM series tags and verifying geometry…</span>
+              </div>
+            )}
+
+            {dicomResult && (
+              <div
+                className={`rounded-md border p-3 font-mono text-[10.5px] ${
+                  dicomResult.ok
+                    ? 'border-emerald-600/40 bg-emerald-500/5 text-slate-300'
+                    : 'border-rose-600/40 bg-rose-500/5 text-slate-300'
+                }`}
+              >
+                <div className="flex items-center justify-between border-b border-edge/60 pb-2">
+                  <div className="flex items-center gap-2">
+                    {dicomResult.deidentified ? (
+                      <span className="flex items-center gap-1 text-emerald-400 font-semibold">
+                        <ShieldCheck className="h-3.5 w-3.5" />
+                        Patient De-identification Verified
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1 text-amber-400 font-semibold">
+                        <AlertTriangle className="h-3.5 w-3.5" />
+                        Patient Identifiers Detected (Anonymize before distribution)
+                      </span>
+                    )}
+                  </div>
+                  <span className="rounded bg-sky-500/20 px-1.5 py-0.5 text-[9px] font-bold text-sky-300">
+                    {dicomResult.series_count} Series Detected
+                  </span>
+                </div>
+
+                {/* Series List */}
+                <div className="mt-2.5 space-y-1.5">
+                  {dicomResult.series.map((s, idx) => (
+                    <div
+                      key={idx}
+                      className="flex items-center justify-between rounded bg-slate-900/60 px-2.5 py-1.5 text-[10px]"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`rounded px-1.5 py-0.5 text-[9px] font-bold ${
+                            s.detected_sequence
+                              ? 'bg-sky-500/25 text-sky-300 border border-sky-500/40'
+                              : 'bg-slate-800 text-slate-400'
+                          }`}
+                        >
+                          {s.detected_sequence ?? 'Unmapped'}
+                        </span>
+                        <span className="font-semibold text-slate-200">{s.series_description}</span>
+                        <span className="text-slate-500">({s.modality})</span>
+                      </div>
+                      <div className="flex items-center gap-3 text-slate-400">
+                        <span>{s.slice_count} slices</span>
+                        <span>{s.shape.join('×')}</span>
+                        <span>{s.spacing_mm.map((v) => v.toFixed(2)).join('×')} mm</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {dicomResult.has_required_sequences ? (
+                  <div className="mt-3 flex items-center justify-between rounded bg-emerald-500/10 px-2.5 py-1.5 text-[10px] text-emerald-300">
+                    <span>✓ All 4 required sequences (T1, T1Gd, T2, FLAIR) identified and mapped.</span>
+                  </div>
+                ) : (
+                  <div className="mt-3 flex items-center justify-between rounded bg-amber-500/10 px-2.5 py-1.5 text-[10px] text-amber-300">
+                    <span>Missing one or more BraTS sequences. Detected: {Object.keys(dicomResult.auto_mapped).join(', ') || 'None'}</span>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        ) : (
+          <>
+            {/* Import Profile Selector */}
+            <div className="mb-3 flex items-center justify-between rounded-md border border-edge/80 bg-panel-2/60 px-3 py-2 text-[11px]">
+              <div className="flex items-center gap-2">
+                <span className="font-mono text-slate-400">Dataset Profile:</span>
+                <span className="text-[10px] text-slate-500">Determines regex heuristics for batch drag & drop</span>
+              </div>
+              <select
+                value={importProfile}
+                onChange={(e) => setImportProfile(e.target.value as ImportProfile)}
+                className="rounded border border-edge bg-panel px-2.5 py-1 font-mono text-[10.5px] text-slate-200 focus:border-sky-500 focus:outline-none"
+              >
+                <option value="standard">Standard Modality Names (T1, T1Gd, T2, FLAIR)</option>
+                <option value="synapse">BraTS Synapse / nnU-Net (_0000 to _0003)</option>
+                <option value="decathlon">Decathlon Task01 (4D split)</option>
+              </select>
+            </div>
+
+            {/* Bulk Dropzone */}
+            <label
+              onDragOver={(e) => {
+                e.preventDefault()
+                setBulkOver(true)
+              }}
+              onDragLeave={() => setBulkOver(false)}
+              onDrop={(e) => {
+                e.preventDefault()
+                setBulkOver(false)
+                applyAutoSort(Array.from(e.dataTransfer.files ?? []))
+              }}
+              className={`mb-3 flex cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed p-3.5 text-center transition ${
+                bulkOver
+                  ? 'border-sky-400 bg-sky-500/15'
+                  : 'border-edge/80 bg-panel-2/30 hover:border-slate-500 hover:bg-panel-2/60'
+              }`}
+            >
+              <input
+                type="file"
+                multiple
+                accept=".nii,.gz"
+                className="hidden"
+                onChange={(e) => {
+                  applyAutoSort(Array.from(e.target.files ?? []))
+                  e.target.value = ''
+                }}
+              />
+              <div className="flex items-center gap-2">
+                <FileCheck className="h-4 w-4 text-sky-400" />
+                <span className="font-mono text-[11px] font-medium text-slate-300">
+                  Drag all four sequence files here at once
+                </span>
+              </div>
+              <span className="font-mono text-[9.5px] text-slate-500">
+                Files will be auto-sorted into slots based on the active dataset profile ({importProfile})
+              </span>
+            </label>
+
+            {unmatched.length > 0 && (
+              <div className="mb-3 rounded-md border border-amber-600/40 bg-amber-500/10 px-3 py-2 font-mono text-[10px] text-amber-300">
+                Ambiguous naming for: {unmatched.join(', ')} — please place manually in the slot boxes below.
+              </div>
+            )}
+
+            {/* Four Sequence Slots Grid */}
+            <div className="grid grid-cols-2 gap-2.5">
+              {REQUIRED.map((r) => (
+                <Dropzone
+                  key={r.key}
+                  slot={r.key}
+                  label={r.label}
+                  hint={r.hint}
+                  file={files[r.key]}
+                  onPick={(f) => {
+                    setFiles((s) => ({ ...s, [r.key]: f }))
+                    setPreflight(null)
+                  }}
+                  onReassign={(newSlot) => handleReassign(r.key, newSlot)}
+                  detectedMeta={preflight?.sequence_metadata?.[r.key]}
+                />
+              ))}
+            </div>
+
+            {/* Optional Expert Mask */}
+            <div className="mt-2.5">
+              <Dropzone
+                slot="expert"
+                label="Expert Reference Mask"
+                hint="Ground truth labels (NCR=1, ED=2, ET=4) for segmentation validation"
+                file={files.expert}
+                onPick={(f) => {
+                  setFiles((s) => ({ ...s, expert: f }))
+                  setPreflight(null)
+                }}
+                onReassign={(newSlot) => handleReassign('expert', newSlot)}
+                optional
+                detectedMeta={preflight?.sequence_metadata?.expert}
+              />
+            </div>
+          </>
+        )}
 
         {/* Pre-flight Inspection Results HUD */}
         {preflight && (

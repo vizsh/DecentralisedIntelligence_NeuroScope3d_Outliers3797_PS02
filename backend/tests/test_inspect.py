@@ -103,3 +103,55 @@ def test_run_sample_path_traversal_blocked():
     res2 = client.post(f"/api/v1/samples/{nonexistent_id}/run/0123456789abcdef0123456789abcdef")
     assert res2.status_code == 404
 
+
+def test_inspect_dicom_empty_reject():
+    res = client.post("/api/v1/studies/inspect-dicom", files=[])
+    # FastAPI returns 422 if files field is missing/empty
+    assert res.status_code in (400, 422)
+
+
+def test_inspect_dicom_zip_parsing(tmp_path: Path):
+    import zipfile
+    import pydicom
+    from pydicom.dataset import FileDataset, FileMetaDataset
+    from pydicom.uid import ExplicitVRLittleEndian
+
+    # Create a minimal synthetic DICOM file
+    meta = FileMetaDataset()
+    meta.MediaStorageSOPClassUID = "1.2.840.10008.5.1.4.1.1.4"  # MR Image Storage
+    meta.MediaStorageSOPInstanceUID = "1.2.3.4.5"
+    meta.TransferSyntaxUID = ExplicitVRLittleEndian
+
+    dcm_path = tmp_path / "slice1.dcm"
+    ds = FileDataset(str(dcm_path), {}, file_meta=meta, preamble=b"\0" * 128)
+    ds.PatientName = "ANONYMOUS"
+    ds.PatientID = "SUBJ001"
+    ds.SeriesDescription = "AX FLAIR"
+    ds.SeriesInstanceUID = "1.2.840.113619.2.1"
+    ds.Modality = "MR"
+    ds.Rows = 64
+    ds.Columns = 64
+    ds.PixelSpacing = [1.0, 1.0]
+    ds.SliceThickness = 2.0
+    ds.ImagePositionPatient = [0.0, 0.0, 0.0]
+    ds.ImageOrientationPatient = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0]
+    ds.PixelData = np.zeros((64, 64), dtype=np.uint16).tobytes()
+    ds.save_as(str(dcm_path))
+
+    zip_path = tmp_path / "dicom_study.zip"
+    with zipfile.ZipFile(zip_path, "w") as zf:
+        zf.write(dcm_path, "slice1.dcm")
+
+    with zip_path.open("rb") as fh:
+        files = [("files", ("dicom_study.zip", fh, "application/zip"))]
+        res = client.post("/api/v1/studies/inspect-dicom", files=files)
+
+    assert res.status_code == 200
+    data = res.json()
+    assert data["ok"] is True
+    assert data["series_count"] == 1
+    assert data["deidentified"] is True
+    assert data["series"][0]["detected_sequence"] == "FLAIR"
+    assert data["series"][0]["slice_count"] == 1
+
+

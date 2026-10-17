@@ -95,6 +95,14 @@ interface State {
   /** Roadmap Section 6 Viewer Modes: Anatomy, Segmentation, Exploration */
   viewer3DMode: 'anatomy' | 'segmentation' | 'exploration'
   setViewer3DMode: (mode: 'anatomy' | 'segmentation' | 'exploration') => void
+
+  /** Interactive 3D clipping planes for neurosurgical exploration */
+  clippingEnabled: boolean
+  setClippingEnabled: (enabled: boolean) => void
+  clippingAxis: 'axial' | 'coronal' | 'sagittal'
+  setClippingAxis: (axis: 'axial' | 'coronal' | 'sagittal') => void
+  clippingOffset: number
+  setClippingOffset: (offset: number) => void
 }
 
 export const useStore = create<State>((set) => ({
@@ -175,4 +183,11 @@ export const useStore = create<State>((set) => ({
       set({ viewer3DMode, autoOrbit: false })
     }
   },
+
+  clippingEnabled: false,
+  setClippingEnabled: (clippingEnabled) => set({ clippingEnabled }),
+  clippingAxis: 'axial',
+  setClippingAxis: (clippingAxis) => set({ clippingAxis }),
+  clippingOffset: 0,
+  setClippingOffset: (clippingOffset) => set({ clippingOffset }),
 }))

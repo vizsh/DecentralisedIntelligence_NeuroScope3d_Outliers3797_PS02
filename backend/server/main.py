@@ -52,6 +52,7 @@ from neuroscope.regions import (
     volumes_all,
 )
 from neuroscope.validate import SEQUENCES, validate_label, validate_study
+from neuroscope.dicom_io import build_volume_from_dicom_slices, detect_dicom_sequence, read_dicom_series
 from server.viewer import prepare_viewer
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -470,6 +471,127 @@ async def inspect_study(
         for upload in [*uploads.values(), expert]:
             if upload:
                 await upload.close()
+
+
+@app.post("/api/v1/studies/inspect-dicom")
+@app.post("/api/studies/inspect-dicom")
+async def inspect_dicom_study(
+    files: list[UploadFile] = File(...),
+):
+    """Inspects uploaded DICOM files or a zip archive, groups them into series,
+    identifies sequences (T1, T1Gd, T2, FLAIR), verifies de-identification,
+    and returns series geometries and warnings without holding the inference lock."""
+    scratch = JOBS / f"dicom_inspect_{int(time.time() * 1000)}"
+    scratch.mkdir(parents=True, exist_ok=True)
+    dcm_paths: list[Path] = []
+    total_bytes = 0
+    try:
+        for upload in files:
+            filename = (upload.filename or "").lower()
+            if filename.endswith(".zip"):
+                zip_path = scratch / "archive.zip"
+                with zip_path.open("wb") as fh:
+                    while chunk := await upload.read(1024 * 1024):
+                        total_bytes += len(chunk)
+                        if total_bytes > MAX_UPLOAD_BYTES:
+                            raise ApiError(413, "upload_too_large", f"DICOM archive exceeds {MAX_UPLOAD_BYTES} bytes.")
+                        fh.write(chunk)
+                try:
+                    with zipfile.ZipFile(zip_path, "r") as zf:
+                        for member in zf.namelist():
+                            if member.startswith("/") or ".." in member:
+                                continue
+                            if member.lower().endswith((".dcm", ".ima")) or "." not in member.split("/")[-1]:
+                                extracted = zf.extract(member, scratch / "extracted")
+                                if Path(extracted).is_file():
+                                    dcm_paths.append(Path(extracted))
+                except zipfile.BadZipFile:
+                    return JSONResponse({"ok": False, "message": "Corrupted or invalid ZIP archive."}, status_code=422)
+            else:
+                dest = scratch / f"slice_{len(dcm_paths):05d}.dcm"
+                with dest.open("wb") as fh:
+                    while chunk := await upload.read(1024 * 1024):
+                        total_bytes += len(chunk)
+                        if total_bytes > MAX_UPLOAD_BYTES:
+                            raise ApiError(413, "upload_too_large", f"DICOM files exceed {MAX_UPLOAD_BYTES} bytes.")
+                        fh.write(chunk)
+                dcm_paths.append(dest)
+
+        if not dcm_paths:
+            return JSONResponse(
+                {"ok": False, "message": "No DICOM files (.dcm) found in upload."},
+                status_code=422,
+            )
+
+        import pydicom
+        series_results = []
+        auto_map: dict[str, str] = {}
+        all_deidentified = True
+        warnings = []
+
+        slices_by_uid: dict[str, list[Path]] = {}
+        for p in dcm_paths:
+            try:
+                ds = pydicom.dcmread(str(p), stop_before_pixels=True)
+                uid = getattr(ds, "SeriesInstanceUID", "unknown")
+                slices_by_uid.setdefault(uid, []).append(p)
+            except Exception:
+                continue
+
+        if not slices_by_uid:
+            return JSONResponse(
+                {"ok": False, "message": "Could not parse valid DICOM headers from uploaded files."},
+                status_code=422,
+            )
+
+        for uid, slice_list in slices_by_uid.items():
+            try:
+                ds0 = pydicom.dcmread(str(slice_list[0]), stop_before_pixels=True)
+                desc = getattr(ds0, "SeriesDescription", "")
+                has_contrast = bool(getattr(ds0, "ContrastBolusAgent", False))
+                seq = detect_dicom_sequence(desc, has_contrast)
+                patient_name = str(getattr(ds0, "PatientName", ""))
+                deidentified = patient_name in ("", "ANONYMOUS", "DEIDENTIFIED", "RESEARCH") or "anon" in patient_name.lower()
+                if not deidentified:
+                    all_deidentified = False
+                    warnings.append(f"Series '{desc or uid}': DICOM PatientName contains non-anonymized identifiers.")
+
+                ps = getattr(ds0, "PixelSpacing", [1.0, 1.0])
+                rows = getattr(ds0, "Rows", 0)
+                cols = getattr(ds0, "Columns", 0)
+                thickness = getattr(ds0, "SliceThickness", 1.0)
+
+                series_results.append({
+                    "series_uid": str(uid),
+                    "series_description": desc or "Unnamed Series",
+                    "modality": str(getattr(ds0, "Modality", "MR")),
+                    "detected_sequence": seq,
+                    "slice_count": len(slice_list),
+                    "shape": [int(cols), int(rows), len(slice_list)],
+                    "spacing_mm": [float(ps[0]), float(ps[1]), float(thickness)],
+                    "patient_deidentified": deidentified,
+                })
+                if seq and seq not in auto_map:
+                    auto_map[seq] = str(uid)
+            except Exception as e:
+                warnings.append(f"Failed to inspect series {uid}: {str(e)}")
+
+        has_all_4 = all(k in auto_map for k in ("T1", "T1Gd", "T2", "FLAIR"))
+
+        return {
+            "ok": True,
+            "series_count": len(series_results),
+            "deidentified": all_deidentified,
+            "has_required_sequences": has_all_4,
+            "auto_mapped": auto_map,
+            "series": series_results,
+            "warnings": [{"code": "dicom_warning", "message": w, "sequence": None} for w in warnings],
+        }
+    finally:
+        shutil.rmtree(scratch, ignore_errors=True)
+        for upload in files:
+            await upload.close()
+
 
 
 def _findings(findings) -> list[dict]:

@@ -23,7 +23,7 @@ function useGeometry(mesh: IsoMesh | null) {
 }
 
 function RegionSurface({
-  mesh, lattice, hex, opacity, visible, wireOnly, order, onSelect,
+  mesh, lattice, hex, opacity, visible, wireOnly, order, onSelect, clipPlanes,
 }: {
   mesh: IsoMesh | null
   lattice: IsoMesh | null
@@ -33,6 +33,7 @@ function RegionSurface({
   wireOnly: boolean
   order: number
   onSelect: (e: ThreeEvent<MouseEvent>) => void
+  clipPlanes?: THREE.Plane[]
 }) {
   const geometry = useGeometry(mesh)
   const latticeGeometry = useGeometry(lattice)
@@ -63,6 +64,8 @@ function RegionSurface({
             toneMapped={false}
             emissive={hex}
             emissiveIntensity={hovered ? 0.5 : 0.18}
+            clippingPlanes={clipPlanes}
+            clipShadows={true}
           />
         </mesh>
       )}
@@ -75,6 +78,7 @@ function RegionSurface({
           toneMapped={false}
           opacity={wireOnly ? (hovered ? 0.95 : 0.72) : Math.min(0.34, opacity * 0.4 + 0.08)}
           depthWrite={false}
+          clippingPlanes={clipPlanes}
         />
       </mesh>
     </group>
@@ -106,7 +110,7 @@ const FRESNEL_FRAG = /* glsl */ `
 `
 
 /** Rim light that only fires where the surface turns away — the glass-brain look. */
-function FresnelShell({ geometry, intensity }: { geometry: THREE.BufferGeometry; intensity: number }) {
+function FresnelShell({ geometry, intensity, clipPlanes }: { geometry: THREE.BufferGeometry; intensity: number; clipPlanes?: THREE.Plane[] }) {
   const uniforms = useMemo(
     () => ({
       uColor: { value: new THREE.Color(0x9fe0ef) },
@@ -127,13 +131,15 @@ function FresnelShell({ geometry, intensity }: { geometry: THREE.BufferGeometry;
         depthWrite={false}
         blending={THREE.AdditiveBlending}
         side={THREE.DoubleSide}
+        clipping={Boolean(clipPlanes && clipPlanes.length > 0)}
+        clippingPlanes={clipPlanes}
       />
     </mesh>
   )
 }
 
-function BrainShell({ mesh, lattice, opacity, visible }: {
-  mesh: IsoMesh | null; lattice: IsoMesh | null; opacity: number; visible: boolean
+function BrainShell({ mesh, lattice, opacity, visible, clipPlanes }: {
+  mesh: IsoMesh | null; lattice: IsoMesh | null; opacity: number; visible: boolean; clipPlanes?: THREE.Plane[]
 }) {
   const geometry = useGeometry(mesh)
   const latticeGeometry = useGeometry(lattice)
@@ -153,6 +159,8 @@ function BrainShell({ mesh, lattice, opacity, visible }: {
           metalness={0}
           side={THREE.BackSide}
           depthWrite={false}
+          clippingPlanes={clipPlanes}
+          clipShadows={true}
         />
       </mesh>
       <mesh geometry={geometry} renderOrder={1}>
@@ -166,6 +174,8 @@ function BrainShell({ mesh, lattice, opacity, visible }: {
           clearcoatRoughness={0.4}
           side={THREE.FrontSide}
           depthWrite={false}
+          clippingPlanes={clipPlanes}
+          clipShadows={true}
         />
       </mesh>
       {/* Faint filament texture over the shell, the way the reference reads. */}
@@ -176,9 +186,10 @@ function BrainShell({ mesh, lattice, opacity, visible }: {
           transparent
           opacity={opacity * 0.16}
           depthWrite={false}
+          clippingPlanes={clipPlanes}
         />
       </mesh>
-      <FresnelShell geometry={geometry} intensity={opacity * 0.9} />
+      <FresnelShell geometry={geometry} intensity={opacity * 0.9} clipPlanes={clipPlanes} />
     </group>
   )
 }
@@ -262,10 +273,24 @@ function CameraRig({ target, spin, onInteract }: {
 
 function Scene() {
   const { study, brainMesh, brainLattice, meshes, lattices } = useStudy()
+  const { gl } = useThree()
   const {
     regions, brainVisible, brainOpacity, isolated, setIsolated,
     wireframe, voxel, maskSource, autoOrbit, setAutoOrbit,
+    clippingEnabled, clippingAxis, clippingOffset,
   } = useStore()
+
+  useEffect(() => {
+    gl.localClippingEnabled = clippingEnabled
+  }, [gl, clippingEnabled])
+
+  const clipPlanes = useMemo(() => {
+    if (!clippingEnabled) return []
+    let normal = new THREE.Vector3(0, 0, -1)
+    if (clippingAxis === 'sagittal') normal = new THREE.Vector3(-1, 0, 0)
+    else if (clippingAxis === 'coronal') normal = new THREE.Vector3(0, -1, 0)
+    return [new THREE.Plane(normal, clippingOffset)]
+  }, [clippingEnabled, clippingAxis, clippingOffset])
 
   const activeMeshes = meshes[maskSource]
   const activeLattices = lattices[maskSource]
@@ -310,6 +335,7 @@ function Scene() {
         lattice={brainLattice}
         opacity={isolated ? brainOpacity * 0.45 : brainOpacity}
         visible={brainVisible}
+        clipPlanes={clipPlanes}
       />
 
       {REGIONS.map((def, rank) => {
@@ -325,6 +351,7 @@ function Scene() {
             visible={ui.visible}
             order={2 + rank * 2}
             wireOnly={wireframe || outerThanIsolated}
+            clipPlanes={clipPlanes}
             onSelect={(e) => {
               e.stopPropagation()
               setAutoOrbit(false)
@@ -333,6 +360,10 @@ function Scene() {
           />
         )
       })}
+
+      {clippingEnabled && clipPlanes.length > 0 && (
+        <planeHelper args={[clipPlanes[0], 220, 0x38bdf8]} />
+      )}
 
       <Crosshair3D position={crosshairWorld as [number, number, number]} extent={isolated ? 60 : 150} />
 
@@ -384,7 +415,8 @@ export default function ThreeBrainTwin() {
   const {
     regions, toggleRegion, setOpacity, isolated, setIsolated,
     wireframe, setWireframe, brainVisible, toggleBrain, brainOpacity, setBrainOpacity,
-    voxel,
+    voxel, clippingEnabled, setClippingEnabled, clippingAxis, setClippingAxis,
+    clippingOffset, setClippingOffset,
   } = useStore()
   const { study } = useStudy()
   const world = voxelToWorld(study.affine, voxel[0], voxel[1], voxel[2])
@@ -513,6 +545,79 @@ export default function ThreeBrainTwin() {
             Reset view
           </button>
         </div>
+      </div>
+
+      {/* Neurosurgical Clipping HUD (Page 4/5 Clinical Utility) */}
+      <div className="absolute left-3 top-[252px] w-[232px] rounded-md border border-edge/80 bg-panel/85 px-3 py-2.5 backdrop-blur-sm">
+        <div className="mb-1.5 flex items-center justify-between">
+          <div className="flex items-center gap-1.5">
+            <span className="font-sans text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+              Surgical Clipping
+            </span>
+          </div>
+          <button
+            onClick={() => setClippingEnabled(!clippingEnabled)}
+            className={`rounded px-1.5 py-0.5 font-mono text-[9.5px] font-medium transition ${
+              clippingEnabled
+                ? 'bg-sky-500/20 text-sky-300 border border-sky-500/40'
+                : 'bg-panel-2 text-slate-400 hover:text-slate-200 border border-edge'
+            }`}
+          >
+            {clippingEnabled ? 'Active' : 'Off'}
+          </button>
+        </div>
+
+        {clippingEnabled && (
+          <div className="mt-2 space-y-2">
+            <div className="flex gap-1">
+              {(['axial', 'coronal', 'sagittal'] as const).map((axis) => (
+                <button
+                  key={axis}
+                  onClick={() => setClippingAxis(axis)}
+                  className={`flex-1 rounded py-0.5 text-center font-mono text-[9px] uppercase transition ${
+                    clippingAxis === axis
+                      ? 'bg-sky-500/25 font-bold text-sky-200 border border-sky-500/50'
+                      : 'border border-edge text-slate-400 hover:text-slate-200 hover:bg-white/5'
+                  }`}
+                >
+                  {axis === 'axial' ? 'Axial' : axis === 'coronal' ? 'Coronal' : 'Sagittal'}
+                </button>
+              ))}
+            </div>
+
+            <div>
+              <div className="mb-1 flex items-center justify-between font-mono text-[9.5px] text-slate-400">
+                <span>Cut Depth</span>
+                <span className="text-sky-300">{clippingOffset.toFixed(1)} mm</span>
+              </div>
+              <input
+                type="range"
+                min={-120}
+                max={120}
+                step={1}
+                value={clippingOffset}
+                onChange={(e) => setClippingOffset(Number(e.target.value))}
+                className="w-full"
+              />
+            </div>
+
+            <div className="flex justify-between items-center pt-0.5 text-[9px] font-mono">
+              <button
+                onClick={() => setClippingOffset(0)}
+                className="text-slate-500 hover:text-slate-300 transition"
+              >
+                Reset (0mm)
+              </button>
+              <button
+                onClick={() => setClippingOffset(-clippingOffset)}
+                className="text-slate-500 hover:text-sky-400 transition"
+                title="Invert clipping side"
+              >
+                Invert Cut
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {isolated && (
