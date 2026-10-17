@@ -25,7 +25,7 @@ def test_export_bundle_contains_the_expected_files(tmp_path: Path):
     job_id = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
     out = _make_fake_job(job_id)
     try:
-        res = client.get(f"/api/jobs/{job_id}/export")
+        res = client.get(f"/api/v1/jobs/{job_id}/export")
         assert res.status_code == 200
         assert res.headers["content-type"] == "application/zip"
         assert f"neuroscope3d_case_{job_id[:8]}.zip" in res.headers["content-disposition"]
@@ -41,7 +41,7 @@ def test_export_bundle_contains_the_expected_files(tmp_path: Path):
 
 
 def test_export_bundle_404s_for_an_unknown_job():
-    res = client.get("/api/jobs/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb/export")
+    res = client.get("/api/v1/jobs/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb/export")
     assert res.status_code == 404
     body = res.json()
     assert body["code"] == "job_not_done"

@@ -36,7 +36,7 @@ def test_inspect_endpoint_valid_sequences(tmp_path: Path):
         "T2": ("T2.nii.gz", io.BytesIO(t2.read_bytes()), "application/gzip"),
         "FLAIR": ("FLAIR.nii.gz", io.BytesIO(flair.read_bytes()), "application/gzip"),
     }
-    res = client.post("/api/studies/inspect", files=files)
+    res = client.post("/api/v1/studies/inspect", files=files)
     assert res.status_code == 200
     data = res.json()
     assert data["ok"] is True
@@ -54,7 +54,7 @@ def test_inspect_endpoint_incomplete_set(tmp_path: Path):
         "T1": ("T1.nii.gz", io.BytesIO(t1.read_bytes()), "application/gzip"),
         "FLAIR": ("FLAIR.nii.gz", io.BytesIO(flair.read_bytes()), "application/gzip"),
     }
-    res = client.post("/api/studies/inspect", files=files)
+    res = client.post("/api/v1/studies/inspect", files=files)
     assert res.status_code == 200
     data = res.json()
     assert data["ok"] is False
@@ -75,7 +75,7 @@ def test_inspect_endpoint_shape_mismatch(tmp_path: Path):
         "T2": ("T2.nii.gz", io.BytesIO(t2.read_bytes()), "application/gzip"),
         "FLAIR": ("FLAIR.nii.gz", io.BytesIO(flair.read_bytes()), "application/gzip"),
     }
-    res = client.post("/api/studies/inspect", files=files)
+    res = client.post("/api/v1/studies/inspect", files=files)
     assert res.status_code == 200
     data = res.json()
     assert data["ok"] is False
@@ -84,7 +84,7 @@ def test_inspect_endpoint_shape_mismatch(tmp_path: Path):
 
 
 def test_models_status_endpoint():
-    res = client.get("/api/models/status")
+    res = client.get("/api/v1/models/status")
     assert res.status_code == 200
     data = res.json()
     assert "status" in data
@@ -96,10 +96,10 @@ def test_models_status_endpoint():
 
 def test_run_sample_path_traversal_blocked():
     malicious_id = "../etc/passwd"
-    res = client.post(f"/api/samples/{malicious_id}/run/0123456789abcdef0123456789abcdef")
+    res = client.post(f"/api/v1/samples/{malicious_id}/run/0123456789abcdef0123456789abcdef")
     assert res.status_code == 404
 
     nonexistent_id = "unknown_phantom_xyz"
-    res2 = client.post(f"/api/samples/{nonexistent_id}/run/0123456789abcdef0123456789abcdef")
+    res2 = client.post(f"/api/v1/samples/{nonexistent_id}/run/0123456789abcdef0123456789abcdef")
     assert res2.status_code == 404
 

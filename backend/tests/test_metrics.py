@@ -19,7 +19,7 @@ def _reset_metrics():
 
 def test_metrics_shape_with_no_activity():
     _reset_metrics()
-    res = client.get("/api/metrics")
+    res = client.get("/api/v1/metrics")
     assert res.status_code == 200
     body = res.json()
     assert body["jobs_completed"] == 0
@@ -43,7 +43,7 @@ def test_metrics_reflects_recorded_outcomes():
     server_main._record_runtime(60.0)
     server_main._record_runtime(80.0)
 
-    body = client.get("/api/metrics").json()
+    body = client.get("/api/v1/metrics").json()
     assert body["jobs_completed"] == 2
     assert body["jobs_errored"] == 1
     assert body["jobs_rejected_by_code"] == {"not_finite": 2, "shape_mismatch": 1}

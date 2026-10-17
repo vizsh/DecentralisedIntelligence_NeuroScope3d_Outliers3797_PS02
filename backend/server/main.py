@@ -110,7 +110,7 @@ def report_stage(job: str, stage: str, **extra) -> None:
 _queue_lock = threading.Lock()
 _queue: list[str] = []
 _recent_runtimes: list[float] = []
-_RUNTIME_WINDOW = 50  # big enough for a meaningful P50/P95 in /api/metrics, small enough to stay cheap
+_RUNTIME_WINDOW = 50  # big enough for a meaningful P50/P95 in /api/v1/metrics, small enough to stay cheap
 _DEFAULT_ETA_SECONDS = 90.0  # matches this project's own measured real-model timing until data exists
 _MAX_QUEUE_LENGTH = 10  # a sane cap for a single local workstation, not a public multi-tenant service
 
@@ -279,7 +279,7 @@ async def no_store(request: Request, call_next):
     return response
 
 
-@app.get("/api/health")
+@app.get("/api/v1/health")
 def health():
     # Lightweight liveness check: does not trigger expensive bundle initialization
     global _segmenter_cache
@@ -295,7 +295,7 @@ def health():
     }
 
 
-@app.get("/api/metrics")
+@app.get("/api/v1/metrics")
 def metrics():
     """Real, measured numbers — job outcomes and inference timing — rather than an
     anecdote about reliability. Crude by design (no Prometheus, no time-series
@@ -331,7 +331,7 @@ def metrics():
     }
 
 
-@app.get("/api/models/status")
+@app.get("/api/v1/models/status")
 def model_status():
     segmenter = get_segmenter()
     info = segmenter.info
@@ -349,9 +349,9 @@ def model_status():
     }
 
 
-@app.get("/api/assistant/health")
+@app.get("/api/v1/assistant/health")
 def assistant_health_check():
-    """Mirrors /api/health's pattern for the segmentation model: checked once on panel open,
+    """Mirrors /api/v1/health's pattern for the segmentation model: checked once on panel open,
     shown live, so the UI never offers a chat box the backend can't actually answer from."""
     return assistant_health(SETTINGS)
 
@@ -362,7 +362,7 @@ class AssistantChatRequest(BaseModel):
     mode: str = "trainee"  # "trainee" | "clinician" — see neuroscope.assistant.Mode
 
 
-@app.post("/api/assistant/chat")
+@app.post("/api/v1/assistant/chat")
 def assistant_chat(req: AssistantChatRequest):
     mode = req.mode if req.mode in ("trainee", "clinician") else "trainee"
     job_metadata = None
@@ -385,7 +385,7 @@ def assistant_chat(req: AssistantChatRequest):
     }
 
 
-@app.post("/api/studies/inspect")
+@app.post("/api/v1/studies/inspect")
 async def inspect_study(
     T1: UploadFile | None = File(None),
     T1Gd: UploadFile | None = File(None),
@@ -673,7 +673,7 @@ async def _run_pipeline(job: str, paths: dict[str, Path], expert_path: Path | No
         raise
 
 
-@app.post("/api/segment/{job}")
+@app.post("/api/v1/segment/{job}")
 async def segment(
     job: str,
     T1: UploadFile = File(...),
@@ -781,12 +781,12 @@ def _samples_manifest() -> list[dict]:
     return out
 
 
-@app.get("/api/samples")
+@app.get("/api/v1/samples")
 def list_samples():
     return {"samples": _samples_manifest()}
 
 
-@app.post("/api/samples/{sample_id}/run/{job}")
+@app.post("/api/v1/samples/{sample_id}/run/{job}")
 async def run_sample(sample_id: str, job: str):
     """Run a pre-staged sample case exactly like an uploaded one — the only
     difference is where the four sequence files come from."""
@@ -857,7 +857,7 @@ async def run_sample(sample_id: str, job: str):
         _current_job = None
 
 
-@app.get("/api/jobs/{job}/status")
+@app.get("/api/v1/jobs/{job}/status")
 def job_status(job: str):
     with _progress_lock:
         entry = PROGRESS.get(job)
@@ -877,24 +877,24 @@ def _jobdir(job: str) -> Path:
     return path
 
 
-@app.get("/api/jobs/{job}/metadata")
+@app.get("/api/v1/jobs/{job}/metadata")
 def metadata(job: str):
     return FileResponse(_jobdir(job) / "metadata.json", media_type="application/json")
 
 
-@app.get("/api/jobs/{job}/volume/{seq}")
+@app.get("/api/v1/jobs/{job}/volume/{seq}")
 def volume(job: str, seq: str):
     if seq not in SEQUENCES:
         raise ApiError(404, "unknown_sequence", "Sequence not found.")
     return FileResponse(_jobdir(job) / f"{seq}.bin", media_type="application/octet-stream")
 
 
-@app.get("/api/jobs/{job}/labels")
+@app.get("/api/v1/jobs/{job}/labels")
 def labels(job: str):
     return FileResponse(_jobdir(job) / "labels.bin", media_type="application/octet-stream")
 
 
-@app.get("/api/jobs/{job}/uncertainty/{region}")
+@app.get("/api/v1/jobs/{job}/uncertainty/{region}")
 def uncertainty(job: str, region: str):
     if region not in ("WT", "TC", "ET"):
         raise ApiError(404, "unknown_region", "Region not found.")
@@ -904,7 +904,7 @@ def uncertainty(job: str, region: str):
     return FileResponse(p, media_type="application/octet-stream")
 
 
-@app.get("/api/jobs/{job}/expert-labels")
+@app.get("/api/v1/jobs/{job}/expert-labels")
 def expert_labels(job: str):
     p = _jobdir(job) / "expert-labels.bin"
     if not p.exists():
@@ -912,17 +912,17 @@ def expert_labels(job: str):
     return FileResponse(p, media_type="application/octet-stream")
 
 
-@app.get("/api/jobs/{job}/prediction")
+@app.get("/api/v1/jobs/{job}/prediction")
 def prediction(job: str):
     return FileResponse(_jobdir(job) / "prediction.nii.gz", filename="prediction.nii.gz", media_type="application/gzip")
 
 
-@app.get("/api/jobs/{job}/report")
+@app.get("/api/v1/jobs/{job}/report")
 def report(job: str):
     return FileResponse(_jobdir(job) / "report.html", media_type="text/html")
 
 
-@app.get("/api/jobs/{job}/export")
+@app.get("/api/v1/jobs/{job}/export")
 def export_bundle(job: str):
     """A single-click "take this case with you" download — the provenance report,
     the raw metadata, and the original-grid prediction NIfTI, zipped. Built for the
@@ -992,7 +992,7 @@ def _report_html(m: dict) -> str:
     )
 
 
-@app.get("/api/jobs/{job}/manifest")
+@app.get("/api/v1/jobs/{job}/manifest")
 def job_manifest(job: str):
     path = _jobdir(job)
     meta = json.loads((path / "metadata.json").read_text())
@@ -1017,7 +1017,7 @@ def job_manifest(job: str):
     }
 
 
-@app.get("/api/jobs/{job}/components/{region}")
+@app.get("/api/v1/jobs/{job}/components/{region}")
 def job_components(job: str, region: str):
     if region not in ("WT", "TC", "ET"):
         raise ApiError(404, "invalid_region", "Region must be WT, TC, or ET.")
@@ -1037,7 +1037,7 @@ def job_components(job: str, region: str):
     }
 
 
-@app.get("/api/jobs/{job}/errors/{region}")
+@app.get("/api/v1/jobs/{job}/errors/{region}")
 def job_errors(job: str, region: str):
     if region not in ("WT", "TC", "ET"):
         raise ApiError(404, "invalid_region", "Region must be WT, TC, or ET.")
@@ -1058,7 +1058,7 @@ class ComparisonRequest(BaseModel):
     job_b: str
 
 
-@app.post("/api/comparisons")
+@app.post("/api/v1/comparisons")
 def compare_jobs(req: ComparisonRequest):
     dir_a = _jobdir(req.job_a)
     dir_b = _jobdir(req.job_b)

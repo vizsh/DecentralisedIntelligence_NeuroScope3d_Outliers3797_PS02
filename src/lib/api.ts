@@ -102,7 +102,7 @@ export class ApiError extends Error {
 
 export async function health(): Promise<{ status: string; model_ready: boolean; model_name: string } | null> {
   try {
-    const res = await fetch(`${BASE}/api/health`)
+    const res = await fetch(`${BASE}/api/v1/health`)
     if (!res.ok) return null
     return await res.json()
   } catch {
@@ -136,7 +136,7 @@ export interface Stage {
 
 export async function pollStage(jobId: string): Promise<Stage | null> {
   try {
-    const res = await fetch(`${BASE}/api/jobs/${jobId}/status`)
+    const res = await fetch(`${BASE}/api/v1/jobs/${jobId}/status`)
     if (!res.ok) return null
     return await res.json()
   } catch {
@@ -155,7 +155,7 @@ export interface SampleInfo {
 
 export async function listSamples(): Promise<SampleInfo[]> {
   try {
-    const res = await fetch(`${BASE}/api/samples`)
+    const res = await fetch(`${BASE}/api/v1/samples`)
     if (!res.ok) return []
     const body = await res.json()
     return body.samples ?? []
@@ -189,7 +189,7 @@ export async function inspectStudy(files: Partial<Record<'T1' | 'T1Gd' | 'T2' | 
   if (files.expert) form.append('expert', files.expert)
 
   try {
-    const res = await fetch(`${BASE}/api/studies/inspect`, { method: 'POST', body: form })
+    const res = await fetch(`${BASE}/api/v1/studies/inspect`, { method: 'POST', body: form })
     return await res.json()
   } catch (e) {
     return {
@@ -208,7 +208,7 @@ export async function inspectStudy(files: Partial<Record<'T1' | 'T1Gd' | 'T2' | 
 export async function runSample(sampleId: string, jobId: string): Promise<SegmentResult> {
   let res: Response
   try {
-    res = await fetch(`${BASE}/api/samples/${sampleId}/run/${jobId}`, { method: 'POST' })
+    res = await fetch(`${BASE}/api/v1/samples/${sampleId}/run/${jobId}`, { method: 'POST' })
   } catch {
     throw new ApiError([
       { code: 'unreachable', sequence: null, message: 'Cannot reach the local NeuroScope server at ' + BASE + '. Is it running?' },
@@ -231,7 +231,7 @@ export async function submitStudy(jobId: string, files: UploadFiles): Promise<Se
 
   let res: Response
   try {
-    res = await fetch(`${BASE}/api/segment/${jobId}`, { method: 'POST', body: form })
+    res = await fetch(`${BASE}/api/v1/segment/${jobId}`, { method: 'POST', body: form })
   } catch {
     throw new ApiError([
       { code: 'unreachable', sequence: null, message: 'Cannot reach the local NeuroScope server at ' + BASE + '. Is it running?' },
@@ -251,17 +251,17 @@ async function fetchBytes(path: string): Promise<Uint8Array> {
 }
 
 export const fetchVolume = (jobId: string, seq: 'T1' | 'T1Gd' | 'T2' | 'FLAIR') =>
-  fetchBytes(`/api/jobs/${jobId}/volume/${seq}`)
+  fetchBytes(`/api/v1/jobs/${jobId}/volume/${seq}`)
 
-export const fetchLabels = (jobId: string) => fetchBytes(`/api/jobs/${jobId}/labels`)
+export const fetchLabels = (jobId: string) => fetchBytes(`/api/v1/jobs/${jobId}/labels`)
 
 export const fetchUncertainty = (jobId: string, region: 'WT' | 'TC' | 'ET') =>
-  fetchBytes(`/api/jobs/${jobId}/uncertainty/${region}`)
+  fetchBytes(`/api/v1/jobs/${jobId}/uncertainty/${region}`)
 
-export const fetchExpertLabels = (jobId: string) => fetchBytes(`/api/jobs/${jobId}/expert-labels`)
+export const fetchExpertLabels = (jobId: string) => fetchBytes(`/api/v1/jobs/${jobId}/expert-labels`)
 
-export const reportUrl = (jobId: string) => `${BASE}/api/jobs/${jobId}/report`
-export const exportBundleUrl = (jobId: string) => `${BASE}/api/jobs/${jobId}/export`
+export const reportUrl = (jobId: string) => `${BASE}/api/v1/jobs/${jobId}/report`
+export const exportBundleUrl = (jobId: string) => `${BASE}/api/v1/jobs/${jobId}/export`
 
 export interface ModelStatus {
   status: 'ready' | 'fallback'
@@ -277,7 +277,7 @@ export interface ModelStatus {
 
 export async function getModelStatus(): Promise<ModelStatus | null> {
   try {
-    const res = await fetch(`${BASE}/api/models/status`)
+    const res = await fetch(`${BASE}/api/v1/models/status`)
     if (!res.ok) return null
     return await res.json()
   } catch {
@@ -287,7 +287,7 @@ export async function getModelStatus(): Promise<ModelStatus | null> {
 
 export async function getJobManifest(jobId: string): Promise<any | null> {
   try {
-    const res = await fetch(`${BASE}/api/jobs/${jobId}/manifest`)
+    const res = await fetch(`${BASE}/api/v1/jobs/${jobId}/manifest`)
     if (!res.ok) return null
     return await res.json()
   } catch {
@@ -297,7 +297,7 @@ export async function getJobManifest(jobId: string): Promise<any | null> {
 
 export async function getJobComponents(jobId: string, region: 'WT' | 'TC' | 'ET'): Promise<any | null> {
   try {
-    const res = await fetch(`${BASE}/api/jobs/${jobId}/components/${region}`)
+    const res = await fetch(`${BASE}/api/v1/jobs/${jobId}/components/${region}`)
     if (!res.ok) return null
     return await res.json()
   } catch {
@@ -307,7 +307,7 @@ export async function getJobComponents(jobId: string, region: 'WT' | 'TC' | 'ET'
 
 export async function getJobErrors(jobId: string, region: 'WT' | 'TC' | 'ET'): Promise<any | null> {
   try {
-    const res = await fetch(`${BASE}/api/jobs/${jobId}/errors/${region}`)
+    const res = await fetch(`${BASE}/api/v1/jobs/${jobId}/errors/${region}`)
     if (!res.ok) return null
     return await res.json()
   } catch {
@@ -317,7 +317,7 @@ export async function getJobErrors(jobId: string, region: 'WT' | 'TC' | 'ET'): P
 
 export async function compareJobs(jobA: string, jobB: string): Promise<any | null> {
   try {
-    const res = await fetch(`${BASE}/api/comparisons`, {
+    const res = await fetch(`${BASE}/api/v1/comparisons`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ job_a: jobA, job_b: jobB }),
@@ -329,7 +329,7 @@ export async function compareJobs(jobA: string, jobB: string): Promise<any | nul
   }
 }
 
-export const predictionUrl = (jobId: string) => `${BASE}/api/jobs/${jobId}/prediction`
+export const predictionUrl = (jobId: string) => `${BASE}/api/v1/jobs/${jobId}/prediction`
 
 // ---------------------------------------------------------------- Assistant (local Ollama only)
 // Clinician/trainee tool-copilot only — never patient-facing. The backend never sends it raw
@@ -348,7 +348,7 @@ export interface AssistantHealth {
 
 export async function assistantHealth(): Promise<AssistantHealth | null> {
   try {
-    const res = await fetch(`${BASE}/api/assistant/health`)
+    const res = await fetch(`${BASE}/api/v1/assistant/health`)
     if (!res.ok) return null
     return await res.json()
   } catch {
@@ -371,7 +371,7 @@ export async function assistantAsk(
   jobId: string | null,
   mode: AssistantMode
 ): Promise<AssistantAnswer> {
-  const res = await fetch(`${BASE}/api/assistant/chat`, {
+  const res = await fetch(`${BASE}/api/v1/assistant/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ question, job_id: jobId, mode }),
