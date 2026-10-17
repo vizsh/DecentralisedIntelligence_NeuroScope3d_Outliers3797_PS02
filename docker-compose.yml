@@ -1,0 +1,57 @@
+# NOT YET BUILD-VERIFIED: written and reviewed, but this development environment has
+# no Docker installed, so `docker compose up --build` has not actually been run
+# end-to-end here. Treat this the same as this project treats any other unmeasured
+# claim — run it yourself before trusting it for a judging slot, and report back
+# anything that needs fixing.
+#
+# One-command reproducibility for a judge (or anyone) trying this out fresh:
+#
+#   docker compose up --build
+#
+# First run: the backend container downloads + sha256-verifies the MONAI
+# checkpoint (a few hundred MB, one time, cached in the backend_models volume
+# after that). The tool copilot needs its own one-time model pull — it is NOT
+# fetched automatically, because an 8GB+ download on every fresh `up` would be
+# a worse first-run experience than a chatbot that's simply unavailable until
+# you ask for it:
+#
+#   docker compose exec ollama ollama pull llama3.1:8b
+#   docker compose exec ollama ollama pull nomic-embed-text
+#
+# Everything else — the segmentation pipeline, the 3D viewer, the Datasets
+# gallery, the interactive trust layer — works without that step.
+#
+# Then open http://localhost:5173.
+
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "8008:8008"
+    volumes:
+      - backend_models:/app/models
+      - backend_runtime:/app/.runtime
+    environment:
+      - NEUROSCOPE_OLLAMA_URL=http://ollama:11434
+      - NEUROSCOPE_CORS_ORIGINS=http://localhost:5173
+    depends_on:
+      - ollama
+
+  frontend:
+    build: .
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+
+volumes:
+  backend_models:
+  backend_runtime:
+  ollama_data:

@@ -1,0 +1,14 @@
+models
+testdata
+.runtime
+data/raw
+data/raw_sample
+data/decathlon
+__pycache__
+**/__pycache__
+.venv
+venv
+*.nii
+*.nii.gz
+.env
+.env.*
