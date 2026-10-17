@@ -2,36 +2,40 @@ import { useState } from 'react'
 import { useStudyOptional } from '../../state/study'
 import { useWorkspaceStore } from '../../state/workspaceStore'
 
+// General radiology-education definitions only — never a statement about any specific patient's
+// scan or case. Every "details" entry is deliberately hedged (may/can/is often associated with),
+// per CLAUDE.md's wording rule: this tool explains terminology, it never characterises what a
+// specific finding is or means for a specific person.
 const GLOSSARY_TERMS = [
   {
     term: 'T2/FLAIR Hyperintensity',
-    plainMeaning: 'Areas that appear brighter than normal on T2 or FLAIR scans.',
-    details: 'This usually indicates increased water or fluid content. In brain imaging, this can be caused by swelling (edema), tissue irritation, or inflammation surrounding a mass.',
-    suggestedQuestion: 'How much of this bright area is expected temporary swelling versus active tumor tissue?'
+    plainMeaning: 'A general radiology term for areas that appear brighter than normal on T2 or FLAIR scans.',
+    details: 'In general, this pattern is commonly associated with increased water or fluid content, which can have several causes (swelling, tissue irritation, or inflammation among them). What it means in a specific scan is for the reviewing radiologist to determine.',
+    suggestedQuestion: 'How should I think about the bright areas on my scan, and what did you find in my specific case?'
   },
   {
     term: 'Contrast Enhancement',
-    plainMeaning: 'Tissues that absorbed the MRI contrast dye (Gadolinium) and glow brightly on T1 scans.',
-    details: 'Normally, the blood-brain barrier keeps dye out of brain tissue. Active tumor blood vessels are often leaky, allowing dye to accumulate. This marks the "Enhancing Tumor" (ET) region.',
-    suggestedQuestion: 'Is this enhancement pattern typical for this type of lesion, or could it be related to previous radiation/treatment?'
+    plainMeaning: 'A general term for tissue that absorbs MRI contrast dye (Gadolinium) and appears brighter on T1 scans.',
+    details: 'Enhancement patterns can have several different causes and are interpreted by a radiologist in the context of the full study. In this platform, the model\'s own enhancing-region prediction is labelled "Enhancing Tumour (ET)" using the standard BraTS naming convention — a region name, not a diagnosis.',
+    suggestedQuestion: 'What does the enhancement pattern in my scan specifically indicate, in your assessment?'
   },
   {
     term: 'Vasogenic Edema',
-    plainMeaning: 'Fluid build-up and swelling in the white matter around an abnormal area.',
-    details: 'Unlike solid tumor cells, vasogenic edema is fluid leakage between brain cells. It often responds well to corticosteroid medications to reduce pressure.',
-    suggestedQuestion: 'Are the current symptoms primarily caused by this surrounding swelling, and is medication indicated to manage it?'
+    plainMeaning: 'A general radiology term for fluid build-up and swelling in brain tissue near an abnormal area.',
+    details: 'This is a general imaging finding with a range of possible causes and management approaches, which your care team determines based on your full clinical picture, not from an image alone.',
+    suggestedQuestion: 'Is swelling a factor in my case, and if so, how are we managing it?'
   },
   {
     term: 'Mass Effect & Midline Shift',
-    plainMeaning: 'Pressure caused by a lesion that pushes against nearby normal brain structures.',
-    details: 'The skull is rigid. When a tumor and swelling expand, they can push the normal midline of the brain slightly to the opposite side or compress ventricles.',
-    suggestedQuestion: 'Is there any significant pressure on critical motor, language, or vision pathways?'
+    plainMeaning: 'A general term for pressure effects some lesions can have on nearby brain structures.',
+    details: 'The skull has a fixed volume, so expansion of any mass or associated swelling can, in some cases, shift nearby structures. Whether this is present and what it means is a radiologist\'s assessment, not something to infer from a label alone.',
+    suggestedQuestion: 'Does my scan show any pressure effects, and would that change anything about my care plan?'
   },
   {
     term: 'Central Necrosis',
-    plainMeaning: 'An area inside the center of the tumor where cells have broken down.',
-    details: 'Fast-growing tumors can outgrow their blood supply, leaving a fluid or non-viable core in the center surrounded by a viable outer rim.',
-    suggestedQuestion: 'Does the presence of a central necrotic core change the recommended surgical or medical approach?'
+    plainMeaning: 'A general radiology term for an area within a mass where tissue appears non-viable on imaging.',
+    details: 'This is a general imaging pattern that can appear in various contexts and is interpreted by a radiologist alongside the rest of the study, not read in isolation.',
+    suggestedQuestion: 'Does my scan show this pattern, and does it affect what you\'re recommending?'
   }
 ]
 
@@ -163,22 +167,26 @@ export default function PatientWorkspace() {
               <div className="rounded border border-sky-500/30 bg-sky-950/20 p-3 space-y-1">
                 <div className="font-bold text-sky-300 text-[12px]">Whole Tumour (WT) — Blue/Teal Outer Shell</div>
                 <p className="text-slate-300 leading-relaxed">
-                  Represents the full boundary of abnormal signal detected on the scan. The vast majority of this outer layer is usually
-                  <strong> vasogenic edema (swelling)</strong> — excess fluid that has seeped into surrounding healthy brain tissue, rather than dense tumor cells.
+                  The model's suspected outer boundary of abnormal signal on this scan. This region commonly includes a
+                  mix of tissue types — your radiologist's report is the source for what's actually present in your case,
+                  not this outline by itself.
                 </p>
               </div>
 
               <div className="rounded border border-indigo-500/30 bg-indigo-950/20 p-3 space-y-1">
                 <div className="font-bold text-indigo-300 text-[12px]">Tumour Core (TC) — Indigo Middle Mass</div>
                 <p className="text-slate-300 leading-relaxed">
-                  Represents the primary solid tumor mass, setting aside the surrounding fluid and swelling. Measuring this core over time helps doctors evaluate whether medical therapies are stabilizing the tumor bulk.
+                  The model's suspected inner region, set apart from the surrounding outer boundary. How this measurement
+                  is used clinically — including any comparison across visits — is a decision for your care team.
                 </p>
               </div>
 
               <div className="rounded border border-amber-500/30 bg-amber-950/20 p-3 space-y-1">
                 <div className="font-bold text-amber-300 text-[12px]">Enhancing Tumour (ET) — Amber Inner Region</div>
                 <p className="text-slate-300 leading-relaxed">
-                  Represents active areas where blood vessels have taken up the MRI contrast dye. This identifies actively proliferating tumor cells with rich vascular blood supply.
+                  The model's suspected region where the scan shows contrast-dye uptake. This is a predicted region from
+                  an AI model, not a confirmed finding — what it represents in your specific case is for your radiologist
+                  to interpret.
                 </p>
               </div>
             </div>
@@ -309,43 +317,33 @@ export default function PatientWorkspace() {
           <div>
             <h2 className="text-[13px] font-semibold text-slate-100">My Scan Timeline & Measured History</h2>
             <p className="text-[10.5px] text-slate-400">
-              Tracking measured 3D volumes across consecutive imaging sessions to observe volumetric trends.
+              Measured 3D volumes for the currently loaded study. Comparing volumes across visits (longitudinal
+              tracking) is not yet available in this build — see the current study's measured figures below.
             </p>
           </div>
 
-          <div className="space-y-3 max-w-4xl">
-            {[
-              {
-                date: '3 Months Prior (Baseline MRI)',
-                wtVolume: '44.8 mL',
-                tcVolume: '14.2 mL',
-                notes: 'Initial pre-treatment diagnostic study. High vasogenic edema fraction.'
-              },
-              {
-                date: 'Current Study (Post-Therapy Assessment)',
-                wtVolume: '42.15 mL',
-                tcVolume: '13.8 mL',
-                notes: 'Current active session. 6.0% reduction in whole-tumor swelling volume.'
-              }
-            ].map((sc, idx) => (
-              <div
-                key={idx}
-                className="rounded-lg border border-edge bg-panel-2/60 p-3.5 space-y-2 hover:border-slate-500 transition-colors"
-              >
+          {bundle ? (
+            <div className="space-y-3 max-w-4xl">
+              <div className="rounded-lg border border-edge bg-panel-2/60 p-3.5 space-y-2">
                 <div className="flex items-center justify-between">
-                  <span className="font-semibold text-[12px] text-slate-200">{sc.date}</span>
+                  <span className="font-semibold text-[12px] text-slate-200">Current Study</span>
                   <span className="rounded bg-sky-500/10 px-2 py-0.5 font-mono text-[9.5px] text-sky-300">
-                    Whole Tumor: {sc.wtVolume}
+                    Whole Tumour: {bundle.report.WT.predML.toFixed(2)} mL
                   </span>
                 </div>
-                <p className="text-[10.5px] text-slate-400 leading-relaxed">{sc.notes}</p>
+                <p className="text-[10.5px] text-slate-400 leading-relaxed">
+                  Measured from the predicted region on this study's own acquisition grid — see the volume formula
+                  in the 3D Studio Viewer's metrics bar for exactly how this figure is derived.
+                </p>
                 <div className="flex items-center justify-between pt-1 border-t border-edge/60 font-mono text-[10px] text-slate-500">
-                  <span>Tumor Core (TC): {sc.tcVolume}</span>
-                  <span className="text-emerald-400">Measured on 1.0mm isotropic grid</span>
+                  <span>Tumour Core (TC): {bundle.report.TC.predML.toFixed(2)} mL</span>
+                  <span className="text-emerald-400">Measured on this study's own voxel grid</span>
                 </div>
               </div>
-            ))}
-          </div>
+            </div>
+          ) : (
+            <p className="text-[10.5px] text-slate-500">No study loaded yet.</p>
+          )}
         </div>
       )}
     </div>

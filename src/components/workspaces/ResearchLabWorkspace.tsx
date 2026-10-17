@@ -441,11 +441,11 @@ export default function ResearchLabWorkspace() {
             </div>
             <div>
               <span className="text-slate-500">Runtime (CPU): </span>
-              <span className="text-slate-200">64.2s (2 passes)</span>
+              <span className="text-slate-200">116.1s (2 passes)</span>
             </div>
             <div>
-              <span className="text-slate-500">Peak Memory: </span>
-              <span className="text-slate-200">3.1 GB</span>
+              <span className="text-slate-500">Measured on: </span>
+              <span className="text-slate-200">brats_206 (real case)</span>
             </div>
           </div>
         </div>
@@ -481,14 +481,12 @@ export default function ResearchLabWorkspace() {
             <div>
               <span className="text-slate-500">Runtime (CPU): </span>
               <span className="text-slate-200">
-                {modelB === 'single_pass' ? '31.4s (1 pass)' : '2.1s (Rule-based)'}
+                {modelB === 'single_pass' ? '79.7s (1 pass)' : '28.0s (rule-based)'}
               </span>
             </div>
             <div>
-              <span className="text-slate-500">Peak Memory: </span>
-              <span className="text-slate-200">
-                {modelB === 'single_pass' ? '2.8 GB' : '0.8 GB'}
-              </span>
+              <span className="text-slate-500">Measured on: </span>
+              <span className="text-slate-200">brats_206 (real case)</span>
             </div>
           </div>
         </div>
@@ -498,12 +496,18 @@ export default function ResearchLabWorkspace() {
       <div className="rounded-lg border border-edge bg-panel/60 p-4 space-y-3">
         <div className="flex items-center justify-between">
           <h2 className="text-[13px] font-semibold text-slate-100">
-            Quantitative Head-to-Head Metrics on {arenaCase}
+            Quantitative Head-to-Head Metrics — brats_206
           </h2>
           <span className="font-mono text-[10px] text-slate-400">
-            Ground Truth: Medical Segmentation Decathlon Rater Consensus
+            Ground Truth: real expert mask, Medical Segmentation Decathlon
           </span>
         </div>
+        <p className="text-[10px] text-slate-500 font-sans">
+          Real, reproducible figures from <code className="text-slate-400">backend/predict.py</code> run directly
+          against the committed brats_206 sample (<code className="text-slate-400">--tta-passes 1|2</code>,{' '}
+          <code className="text-slate-400">--model bundle|heuristic</code>) — not yet wired to the case selector
+          above, so these numbers are for brats_206 specifically regardless of which case is selected there.
+        </p>
 
         <div className="overflow-x-auto rounded border border-edge/80">
           <table className="w-full text-left text-[11px] font-mono">
@@ -512,84 +516,106 @@ export default function ResearchLabWorkspace() {
                 <th className="px-3 py-2">Metric / Region</th>
                 <th className="px-3 py-2">Model A (TTA=2)</th>
                 <th className="px-3 py-2">Model B ({modelB === 'single_pass' ? 'TTA=1' : 'Heuristic'})</th>
-                <th className="px-3 py-2">Absolute Delta (Δ)</th>
-                <th className="px-3 py-2">Scientific Interpretation</th>
+                <th className="px-3 py-2">Delta (Δ)</th>
+                <th className="px-3 py-2">Reading</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-edge/50">
               <tr className="hover:bg-panel-2/30">
                 <td className="px-3 py-2 font-bold text-slate-200">Whole Tumor (WT) Dice</td>
-                <td className="px-3 py-2 text-sky-300 font-semibold">0.912</td>
+                <td className="px-3 py-2 text-sky-300 font-semibold">0.8801</td>
                 <td className="px-3 py-2 text-slate-300">
-                  {modelB === 'single_pass' ? '0.854' : '0.512'}
+                  {modelB === 'single_pass' ? '0.8824' : '0.6979'}
                 </td>
-                <td className="px-3 py-2 text-emerald-400 font-bold">
-                  {modelB === 'single_pass' ? '+0.058 (+6.8%)' : '+0.400'}
+                <td className={modelB === 'single_pass' ? 'px-3 py-2 text-amber-400 font-bold' : 'px-3 py-2 text-emerald-400 font-bold'}>
+                  {modelB === 'single_pass' ? '-0.0023' : '+0.1822'}
                 </td>
                 <td className="px-3 py-2 text-slate-400 font-sans text-[10.5px]">
-                  Flip-TTA dampens boundary jitter on diffuse edema edges
+                  {modelB === 'single_pass'
+                    ? 'TTA=1 scores marginally higher on this single case — TTA’s real value is the uncertainty signal, not a guaranteed Dice gain per-case'
+                    : 'Real model substantially outperforms the rule-based baseline'}
                 </td>
               </tr>
               <tr className="hover:bg-panel-2/30">
                 <td className="px-3 py-2 font-bold text-slate-200">Tumor Core (TC) Dice</td>
-                <td className="px-3 py-2 text-indigo-300 font-semibold">0.879</td>
+                <td className="px-3 py-2 text-indigo-300 font-semibold">0.9125</td>
                 <td className="px-3 py-2 text-slate-300">
-                  {modelB === 'single_pass' ? '0.812' : '0.418'}
+                  {modelB === 'single_pass' ? '0.9155' : '0.1177'}
                 </td>
-                <td className="px-3 py-2 text-emerald-400 font-bold">
-                  {modelB === 'single_pass' ? '+0.067 (+8.2%)' : '+0.461'}
+                <td className={modelB === 'single_pass' ? 'px-3 py-2 text-amber-400 font-bold' : 'px-3 py-2 text-emerald-400 font-bold'}>
+                  {modelB === 'single_pass' ? '-0.0030' : '+0.7948'}
                 </td>
                 <td className="px-3 py-2 text-slate-400 font-sans text-[10.5px]">
-                  Necrotic core cavity boundaries preserved with higher fidelity
+                  {modelB === 'single_pass'
+                    ? 'Comparable; within the kind of run-to-run variation a single case can show'
+                    : 'Heuristic baseline collapses on TC — exactly why it’s a pipeline smoke test, not a real segmenter'}
                 </td>
               </tr>
               <tr className="hover:bg-panel-2/30">
                 <td className="px-3 py-2 font-bold text-slate-200">Enhancing Tumor (ET) Dice</td>
-                <td className="px-3 py-2 text-amber-300 font-semibold">0.841</td>
+                <td className="px-3 py-2 text-amber-300 font-semibold">0.8951</td>
                 <td className="px-3 py-2 text-slate-300">
-                  {modelB === 'single_pass' ? '0.758' : '0.289'}
+                  {modelB === 'single_pass' ? '0.8927' : '0.2355'}
                 </td>
-                <td className="px-3 py-2 text-emerald-400 font-bold">
-                  {modelB === 'single_pass' ? '+0.083 (+10.9%)' : '+0.552'}
+                <td className={modelB === 'single_pass' ? 'px-3 py-2 text-slate-400 font-bold' : 'px-3 py-2 text-emerald-400 font-bold'}>
+                  {modelB === 'single_pass' ? '+0.0024' : '+0.6596'}
                 </td>
                 <td className="px-3 py-2 text-slate-400 font-sans text-[10.5px]">
-                  Highest relative gain; thin hyperintense rim stabilized against noise
+                  {modelB === 'single_pass'
+                    ? 'Essentially tied on this case'
+                    : 'Largest gap of the three regions — ET is the hardest region for the heuristic baseline'}
                 </td>
               </tr>
               <tr className="hover:bg-panel-2/30">
-                <td className="px-3 py-2 font-bold text-slate-200">95% Hausdorff Distance (HD95)</td>
-                <td className="px-3 py-2 text-sky-300 font-semibold">3.42 mm</td>
+                <td className="px-3 py-2 font-bold text-slate-200">WT HD95 (boundary distance)</td>
+                <td className="px-3 py-2 text-sky-300 font-semibold">4.123 mm</td>
                 <td className="px-3 py-2 text-slate-300">
-                  {modelB === 'single_pass' ? '5.18 mm' : '14.20 mm'}
+                  {modelB === 'single_pass' ? '4.123 mm' : '8.124 mm'}
                 </td>
-                <td className="px-3 py-2 text-emerald-400 font-bold">
-                  {modelB === 'single_pass' ? '-1.76 mm (Better)' : '-10.78 mm'}
+                <td className="px-3 py-2 text-slate-400 font-bold">
+                  {modelB === 'single_pass' ? '0.000 mm' : '-4.001 mm'}
                 </td>
                 <td className="px-3 py-2 text-slate-400 font-sans text-[10.5px]">
-                  Significant reduction in maximum boundary divergence
+                  {modelB === 'single_pass'
+                    ? 'Identical on this case'
+                    : 'Real model’s boundary is roughly half the distance error of the heuristic baseline'}
                 </td>
               </tr>
               <tr className="hover:bg-panel-2/30">
                 <td className="px-3 py-2 font-bold text-slate-200">Total Inference Runtime</td>
-                <td className="px-3 py-2 text-slate-300">64.2 s</td>
+                <td className="px-3 py-2 text-slate-300">116.1 s</td>
                 <td className="px-3 py-2 text-slate-300">
-                  {modelB === 'single_pass' ? '31.4 s' : '2.1 s'}
+                  {modelB === 'single_pass' ? '79.7 s' : '28.0 s'}
                 </td>
                 <td className="px-3 py-2 text-amber-400">
-                  {modelB === 'single_pass' ? '+32.8 s (2.04×)' : '+62.1 s'}
+                  {modelB === 'single_pass' ? '+36.4 s (1.46×)' : '+88.1 s (4.14×)'}
                 </td>
                 <td className="px-3 py-2 text-slate-400 font-sans text-[10.5px]">
-                  Linear time trade-off for physical robustness and uncertainty extraction
+                  {modelB === 'single_pass'
+                    ? 'The 2nd TTA pass roughly doubles compute for the uncertainty map, not for raw accuracy'
+                    : 'Real model costs ~88s more than the rule-based floor, for a dramatically more accurate result'}
                 </td>
               </tr>
             </tbody>
           </table>
         </div>
 
-        {/* Scientific Trade-off Synthesis */}
+        {/* Honest synthesis, not a forced narrative */}
         <div className="mt-3 rounded-md border border-edge bg-slate-900/60 p-3.5 text-[11px] leading-relaxed text-slate-300">
-          <strong className="text-sky-300 font-mono">Empirical Conclusion: </strong>
-          The 2-pass flip-TTA ensemble provides a measured <strong>+7.3% to +10.9% Dice improvement</strong> across tumor sub-compartments and lowers 95% boundary distance by <strong>1.76 mm</strong>. In return, runtime increases from 31.4s to 64.2s on standard CPU, staying well within the clinical interactive budget while uniquely yielding a voxel-level disagreement signal.
+          <strong className="text-sky-300 font-mono">Reading these numbers honestly: </strong>
+          {modelB === 'single_pass' ? (
+            <>On this single case, TTA=2 does <strong>not</strong> clearly beat TTA=1 on raw Dice — the two are within
+            normal single-case variation, and TTA=2 is even marginally behind on WT/TC. TTA=2&apos;s real, measured
+            value is the per-voxel uncertainty signal it uniquely produces (see the Trust &amp; Explainability tab),
+            not a guaranteed accuracy win on every case — a claim this platform doesn&apos;t make. This is one case,
+            not a generalizable benchmark; see docs/IMPLEMENTATION_PLAN.md Phase 2 for the GPU-gated multi-case,
+            multi-architecture comparison this would need to generalize.</>
+          ) : (
+            <>Against the rule-based heuristic baseline, the real model wins decisively and unambiguously — Dice
+            improves by 0.18&ndash;0.79 across regions and boundary distance roughly halves, for about 88 extra
+            seconds of CPU time. This is the one comparison in this Arena backed by a real architecture difference,
+            not just a configuration change.</>
+          )}
         </div>
 
         <div className="pt-2 flex justify-end gap-2">

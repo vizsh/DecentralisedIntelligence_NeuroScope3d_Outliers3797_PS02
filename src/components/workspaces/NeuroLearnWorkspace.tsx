@@ -167,7 +167,7 @@ export default function NeuroLearnWorkspace() {
           </div>
 
           <div className="rounded-lg border border-edge bg-panel/60 p-4 space-y-3 lg:col-span-2">
-            <h2 className="text-[13px] font-semibold text-slate-100">Biophysical Diagnostic Significance: {selectedSequence}</h2>
+            <h2 className="text-[13px] font-semibold text-slate-100">Biophysical Imaging Significance: {selectedSequence}</h2>
             <div className="rounded-md border border-edge/80 bg-panel-2/60 p-4 space-y-3">
               {selectedSequence === 'T1' && (
                 <>
