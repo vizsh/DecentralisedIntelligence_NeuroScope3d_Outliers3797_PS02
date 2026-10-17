@@ -30,13 +30,23 @@ function SampleCard({
     >
       <div className="flex items-center justify-between gap-2">
         <span className="truncate text-[12px] font-semibold text-slate-200">{sample.label}</span>
-        <span
-          className={`shrink-0 rounded px-1.5 py-[1px] font-mono text-[9px] ${
-            sample.source === 'decathlon' ? 'bg-emerald-500/10 text-emerald-300' : 'bg-sky-500/10 text-sky-300'
-          }`}
-        >
-          {SOURCE_LABEL[sample.source]}
-        </span>
+        <div className="flex shrink-0 items-center gap-1">
+          {sample.cached && (
+            <span
+              className="rounded bg-amber-500/10 px-1.5 py-[1px] font-mono text-[9px] text-amber-300"
+              title="Prewarmed — this is the model's own cached real output, served in seconds instead of re-running inference."
+            >
+              ⚡ instant
+            </span>
+          )}
+          <span
+            className={`rounded px-1.5 py-[1px] font-mono text-[9px] ${
+              sample.source === 'decathlon' ? 'bg-emerald-500/10 text-emerald-300' : 'bg-sky-500/10 text-sky-300'
+            }`}
+          >
+            {SOURCE_LABEL[sample.source]}
+          </span>
+        </div>
       </div>
       <p className="text-[10.5px] leading-relaxed text-slate-500">{sample.description}</p>
       <div className="mt-1 flex items-center justify-between">

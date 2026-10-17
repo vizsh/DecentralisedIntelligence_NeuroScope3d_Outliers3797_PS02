@@ -151,6 +151,9 @@ export interface SampleInfo {
   source: 'synthetic' | 'decathlon'
   has_expert: boolean
   available: boolean
+  /** prewarmed via `backend/tools/prewarm_samples.py` — "Run this case" returns
+   *  the model's own cached real output in seconds instead of re-running inference */
+  cached: boolean
 }
 
 export async function listSamples(): Promise<SampleInfo[]> {

@@ -120,9 +120,17 @@ python backend/evaluate.py --root backend/data/decathlon --limit 10 --out backen
 ollama serve
 ollama pull llama3.1:8b && ollama pull nomic-embed-text
 python backend/run_assistant_guardrail_tests.py   # verifies the no-diagnosis guardrails before you trust it
+
+# Before demoing: prewarm the Datasets panel's sample cache so "Run this case"
+# returns in seconds instead of re-running real inference live (see Demo tips below)
+python backend/tools/prewarm_samples.py
 ```
 
 Open `http://localhost:5173`, click **Upload case**, drop in four NIfTI sequences (`.nii`/`.nii.gz`), and watch it segment live. No upload yet? The workspace renders a fully interactive synthetic demo case on load, or pick a real case from the **Datasets** panel.
+
+### Demo tips
+
+Every "Run this case" click in the Datasets panel genuinely re-runs the real pipeline — including model inference, 1–3 minutes on CPU — unless it's been prewarmed. Run `python backend/tools/prewarm_samples.py` once before a demo (or after `setup_model.py` re-fetches the checkpoint) and every curated sample is cached: a later click serves the model's own real, deterministic output in a few seconds (marked **⚡ instant** in the panel) instead of recomputing it live. The cache is keyed to the exact checkpoint + TTA-pass count that produced it, so it's automatically skipped — never served — the moment the model changes.
 
 **Or, one command:** `docker compose up --build` runs the frontend, backend, and the local tool-copilot's Ollama service together — see `docker-compose.yml` for the one-time model-pull step the chatbot needs. (Written and reviewed, not build-verified in this project's own dev environment — no Docker installed here; please report back if it needs a fix.)
 

@@ -127,7 +127,7 @@ def _record_runtime(seconds: float) -> None:
 # to every accuracy figure in docs/VERIFICATION.md applies here: "the pipeline is
 # reliable" should be a number from this endpoint, not an anecdote.
 _metrics_lock = threading.Lock()
-_metrics = {"jobs_completed": 0, "jobs_errored": 0, "jobs_rejected_by_code": {}}
+_metrics = {"jobs_completed": 0, "jobs_errored": 0, "jobs_rejected_by_code": {}, "jobs_served_from_cache": 0}
 _SERVER_STARTED_AT = time.time()
 
 
@@ -140,6 +140,8 @@ def _record_outcome(outcome: str, code: str | None = None) -> None:
         elif outcome == "rejected":
             by_code = _metrics["jobs_rejected_by_code"]
             by_code[code] = by_code.get(code, 0) + 1
+        elif outcome == "served_from_cache":
+            _metrics["jobs_served_from_cache"] += 1
 
 
 def _estimate_job_seconds() -> float:
@@ -307,6 +309,7 @@ def metrics():
         completed = _metrics["jobs_completed"]
         errored = _metrics["jobs_errored"]
         rejected_by_code = dict(_metrics["jobs_rejected_by_code"])
+        served_from_cache = _metrics["jobs_served_from_cache"]
     with _queue_lock:
         runtimes = sorted(_recent_runtimes)
         queue_length = len(_queue)
@@ -329,6 +332,7 @@ def metrics():
         "inference_seconds_sample_count": len(runtimes),
         "inference_seconds_window": _RUNTIME_WINDOW,
         "queue_length_now": queue_length,
+        "jobs_served_from_cache": served_from_cache,
     }
 
 
@@ -738,6 +742,40 @@ def _valid_job_id(job: str) -> bool:
     return len(job) == 32 and all(c in "0123456789abcdef" for c in job)
 
 
+def _pipeline_response(job: str, metadata: dict) -> dict:
+    """Shape a completed `process()` result (fresh or served from the sample
+    cache — the schema is identical either way, a cache hit is the exact same
+    deterministic output a fresh run would produce) into the API response."""
+    checkpoint_hash = metadata["model"].get("checkpoint_sha256")
+    return {
+        "job_id": job,
+        "study_id": job,
+        "run_id": f"run_{job[:8]}",
+        "status": "completed",
+        "validation": {
+            "status": "passed",
+            "sequences": {s: "accepted" for s in SEQUENCES},
+            "geometry": "compatible",
+        },
+        "model": {
+            "name": metadata["model"]["name"],
+            "execution_mode": metadata["model"]["execution_mode"],
+            "checkpoint_hash": checkpoint_hash,
+        },
+        "results": {
+            "mask_available": True,
+            "volumes_ml": {k: v["volume_ml"] for k, v in metadata["regions"].items()},
+            "expert_evaluation_available": metadata["has_expert"],
+        },
+        "artifacts": {
+            "prediction_nifti": True,
+            "uncertainty_volume": metadata["uncertainty"] is not None,
+            "report": True,
+        },
+        "metadata": metadata,
+    }
+
+
 async def _run_pipeline(job: str, paths: dict[str, Path], expert_path: Path | None, out: Path, source_mode: str | None = None) -> dict:
     """Run process() in a threadpool and log/track its outcome; re-raises
     InputRejected / any other exception unchanged for the caller to shape
@@ -753,33 +791,7 @@ async def _run_pipeline(job: str, paths: dict[str, Path], expert_path: Path | No
         if metadata["model"]["execution_mode"] == "model_inference" and not checkpoint_hash:
             raise RuntimeError("Model checkpoint hash missing for verified model inference.")
         _record_outcome("completed")
-        return {
-            "job_id": job,
-            "study_id": job,
-            "run_id": f"run_{job[:8]}",
-            "status": "completed",
-            "validation": {
-                "status": "passed",
-                "sequences": {s: "accepted" for s in paths},
-                "geometry": "compatible",
-            },
-            "model": {
-                "name": metadata["model"]["name"],
-                "execution_mode": metadata["model"]["execution_mode"],
-                "checkpoint_hash": checkpoint_hash,
-            },
-            "results": {
-                "mask_available": True,
-                "volumes_ml": {k: v["volume_ml"] for k, v in metadata["regions"].items()},
-                "expert_evaluation_available": metadata["has_expert"],
-            },
-            "artifacts": {
-                "prediction_nifti": True,
-                "uncertainty_volume": metadata["uncertainty"] is not None,
-                "report": True,
-            },
-            "metadata": metadata,
-        }
+        return _pipeline_response(job, metadata)
     except InputRejected as exc:
         with _progress_lock:
             PROGRESS.pop(job, None)
@@ -885,6 +897,45 @@ async def segment(
 # accuracy benchmark).
 SAMPLES_DIR = ROOT / "samples"
 
+# A demo-prewarm cache: `tools/prewarm_samples.py` runs each curated sample
+# through the real pipeline once, ahead of time, and stores the exact output
+# (prediction, display volumes, uncertainty, metadata, report) here. A later
+# "Run this case" click for the same sample is then a file copy — seconds,
+# not the 1-3 real inference minutes — and is still the model's own real,
+# deterministic output (reproducibility is measured at Dice 1.00000, see
+# docs/VERIFICATION.md), never a fabricated or hand-edited result. A cache
+# entry is keyed to the exact checkpoint + TTA-pass count that produced it,
+# so it's never served after the model or that setting changes.
+SAMPLE_CACHE_DIR = SETTINGS.job_dir.parent / "sample_cache"
+
+
+def _model_cache_tag() -> str:
+    """Identity of 'what would produce this result', cheap enough to check on
+    every request without loading the model: the pinned checkpoint hash from
+    model-lock.json (written by setup_model.py) plus the configured TTA pass
+    count. Falls back to a stable 'heuristic' tag when no verified bundle is
+    staged, so a heuristic-fallback cache is never served once a real
+    checkpoint becomes available (and vice versa)."""
+    for candidate in (SETTINGS.bundle_dir, Path(SETTINGS.bundle_dir) / "brats_mri_segmentation"):
+        lock_path = Path(candidate) / "models" / "model-lock.json"
+        if lock_path.exists():
+            try:
+                lock = json.loads(lock_path.read_text())
+                checkpoint_hash = lock.get("sha256", "unknown")
+                return f"{checkpoint_hash[:16]}_tta{SETTINGS.tta_passes}"
+            except (json.JSONDecodeError, OSError):
+                break
+    return "heuristic"
+
+
+def _sample_cache_dir(sample_id: str) -> Path:
+    return SAMPLE_CACHE_DIR / sample_id / _model_cache_tag()
+
+
+def _sample_cache_hit(sample_id: str) -> Path | None:
+    cache_dir = _sample_cache_dir(sample_id)
+    return cache_dir if (cache_dir / "metadata.json").exists() else None
+
 
 def _samples_manifest() -> list[dict]:
     manifest_path = SAMPLES_DIR / "manifest.json"
@@ -898,13 +949,45 @@ def _samples_manifest() -> list[dict]:
     for e in entries:
         case_dir = SAMPLES_DIR / e["id"]
         available = all((case_dir / f"{s}.nii.gz").exists() for s in SEQUENCES)
-        out.append({**e, "available": available})
+        cached = available and _sample_cache_hit(e["id"]) is not None
+        out.append({**e, "available": available, "cached": cached})
     return out
 
 
 @app.get("/api/v1/samples")
 def list_samples():
     return {"samples": _samples_manifest()}
+
+
+# Stage names reported while serving a cache hit, in order — the same stage
+# vocabulary a live run reports, paced with a short, fixed sleep per stage
+# purely so the Datasets panel's progress bar still reads as a real pipeline
+# running rather than jump-cutting straight to done. The work underneath
+# (a handful of file copies) is genuinely sub-second either way.
+_CACHE_SERVE_STAGES = ["received", "validating", "resampling", "segmenting", "measuring", "meshing", "reporting"]
+
+
+async def _serve_cached_sample(job: str, cache_dir: Path, out: Path) -> dict:
+    """Materialize a prewarmed sample's job directory from
+    `tools/prewarm_samples.py`'s cache and return the same response shape a
+    fresh run would. This is the model's own real, deterministic output from
+    when it was prewarmed (see docs/VERIFICATION.md's reproducibility
+    result, Dice 1.00000) — never fabricated or hand-edited — just not
+    recomputed on this click. Deliberately does not touch the `busy` lock,
+    the job queue, or `_record_runtime` (that window must stay a measure of
+    real inference latency, not cache-serve latency)."""
+    for stage in _CACHE_SERVE_STAGES:
+        report_stage(job, stage)
+        await asyncio.sleep(0.12)
+    for f in cache_dir.iterdir():
+        if f.is_file():
+            shutil.copyfile(f, out / f.name)
+    metadata = json.loads((out / "metadata.json").read_text())
+    report_stage(job, "done")
+    log.info("job %s: served from sample cache (%s)", job, cache_dir.parent.name)
+    _record_outcome("completed")
+    _record_outcome("served_from_cache")
+    return _pipeline_response(job, metadata)
 
 
 @app.post("/api/v1/samples/{sample_id}/run/{job}")
@@ -926,12 +1009,24 @@ async def run_sample(sample_id: str, job: str):
     if missing:
         raise ApiError(409, "sample_incomplete", f"Sample '{sample_id}' is missing {', '.join(missing)} on the server.")
 
+    cache_dir = _sample_cache_hit(sample_id)
+
     out = JOBS / job
     if out.exists():
         raise ApiError(409, "job_id_in_use", "Job id already in use.")
     out.mkdir()
-    log.info("job %s: running pre-staged sample '%s'", job, sample_id)
+    log.info("job %s: running pre-staged sample '%s'%s", job, sample_id, " (prewarmed cache hit)" if cache_dir else "")
     report_stage(job, "received")
+
+    if cache_dir is not None:
+        # A cache hit never touches the `busy` lock or the queue — it's a
+        # file copy, not model inference, so it stays instant for a demo even
+        # while a real upload is mid-run, and never contends with it.
+        try:
+            return await _serve_cached_sample(job, cache_dir, out)
+        except Exception as exc:  # pragma: no cover - last-resort guard, never return a partial result
+            shutil.rmtree(out, ignore_errors=True)
+            raise ApiError(500, "processing_failed", f"Cached sample serve failed; no result is available ({exc.__class__.__name__}).") from exc
 
     paths = {s: out / f"{s}.nii.gz" for s in SEQUENCES}
     for s, dest in paths.items():
