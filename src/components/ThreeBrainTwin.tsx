@@ -224,6 +224,90 @@ function Crosshair3D({ position, extent }: { position: [number, number, number];
   )
 }
 
+function SlicePlanes3D({
+  crosshairWorld,
+  centerWorld,
+  extent,
+  showAxial,
+  showCoronal,
+  showSagittal,
+  opacity = 0.18,
+}: {
+  crosshairWorld: [number, number, number]
+  centerWorld: [number, number, number]
+  extent: [number, number, number]
+  showAxial: boolean
+  showCoronal: boolean
+  showSagittal: boolean
+  opacity?: number
+}) {
+  const [wX, wY, wZ] = extent
+
+  return (
+    <group>
+      {/* Axial Plane (XY Plane at crosshair Z) */}
+      {showAxial && (
+        <group position={[centerWorld[0], centerWorld[1], crosshairWorld[2]]}>
+          <mesh renderOrder={1}>
+            <planeGeometry args={[wX * 1.15, wY * 1.15]} />
+            <meshBasicMaterial
+              color={0x0284c7}
+              transparent
+              opacity={opacity}
+              side={THREE.DoubleSide}
+              depthWrite={false}
+            />
+          </mesh>
+          <lineSegments renderOrder={1.1}>
+            <edgesGeometry args={[new THREE.PlaneGeometry(wX * 1.15, wY * 1.15)]} />
+            <lineBasicMaterial color={0x38bdf8} transparent opacity={0.75} depthTest={false} />
+          </lineSegments>
+        </group>
+      )}
+
+      {/* Coronal Plane (XZ Plane at crosshair Y) */}
+      {showCoronal && (
+        <group position={[centerWorld[0], crosshairWorld[1], centerWorld[2]]} rotation={[Math.PI / 2, 0, 0]}>
+          <mesh renderOrder={1}>
+            <planeGeometry args={[wX * 1.15, wZ * 1.15]} />
+            <meshBasicMaterial
+              color={0x059669}
+              transparent
+              opacity={opacity}
+              side={THREE.DoubleSide}
+              depthWrite={false}
+            />
+          </mesh>
+          <lineSegments renderOrder={1.1}>
+            <edgesGeometry args={[new THREE.PlaneGeometry(wX * 1.15, wZ * 1.15)]} />
+            <lineBasicMaterial color={0x34d399} transparent opacity={0.75} depthTest={false} />
+          </lineSegments>
+        </group>
+      )}
+
+      {/* Sagittal Plane (YZ Plane at crosshair X) */}
+      {showSagittal && (
+        <group position={[crosshairWorld[0], centerWorld[1], centerWorld[2]]} rotation={[0, Math.PI / 2, 0]}>
+          <mesh renderOrder={1}>
+            <planeGeometry args={[wY * 1.15, wZ * 1.15]} />
+            <meshBasicMaterial
+              color={0xd97706}
+              transparent
+              opacity={opacity}
+              side={THREE.DoubleSide}
+              depthWrite={false}
+            />
+          </mesh>
+          <lineSegments renderOrder={1.1}>
+            <edgesGeometry args={[new THREE.PlaneGeometry(wY * 1.15, wZ * 1.15)]} />
+            <lineBasicMaterial color={0xfbbf24} transparent opacity={0.75} depthTest={false} />
+          </lineSegments>
+        </group>
+      )}
+    </group>
+  )
+}
+
 interface FlyTarget { centre: THREE.Vector3; distance: number }
 
 function CameraRig({ target, spin, onInteract }: {
@@ -271,7 +355,15 @@ function CameraRig({ target, spin, onInteract }: {
   )
 }
 
-function Scene() {
+function Scene({
+  show3DAxial,
+  show3DCoronal,
+  show3DSagittal,
+}: {
+  show3DAxial: boolean
+  show3DCoronal: boolean
+  show3DSagittal: boolean
+}) {
   const { study, brainMesh, brainLattice, meshes, lattices } = useStudy()
   const { gl } = useThree()
   const {
@@ -316,6 +408,18 @@ function Scene() {
     () => voxelToWorld(study.affine, voxel[0], voxel[1], voxel[2]),
     [study.affine, voxel],
   )
+
+  const centerWorld = useMemo(() => {
+    return voxelToWorld(study.affine, study.dims[0] / 2, study.dims[1] / 2, study.dims[2] / 2) as [number, number, number]
+  }, [study.affine, study.dims])
+
+  const extent = useMemo(() => {
+    return [
+      study.dims[0] * study.spacing[0],
+      study.dims[1] * study.spacing[1],
+      study.dims[2] * study.spacing[2],
+    ] as [number, number, number]
+  }, [study.dims, study.spacing])
 
   // Isolating a region drops everything outside it to a wireframe lattice.
   const order: RegionKey[] = ['WT', 'TC', 'ET']
@@ -365,6 +469,16 @@ function Scene() {
         <planeHelper args={[clipPlanes[0], 220, 0x38bdf8]} />
       )}
 
+      {/* 3D In-Scene Slice Planes */}
+      <SlicePlanes3D
+        crosshairWorld={crosshairWorld as [number, number, number]}
+        centerWorld={centerWorld}
+        extent={extent}
+        showAxial={show3DAxial}
+        showCoronal={show3DCoronal}
+        showSagittal={show3DSagittal}
+      />
+
       <Crosshair3D position={crosshairWorld as [number, number, number]} extent={isolated ? 60 : 150} />
 
       <CameraRig target={flyTarget} spin={autoOrbit} onInteract={() => setAutoOrbit(false)} />
@@ -411,15 +525,22 @@ function AxisTriad() {
 }
 
 export default function ThreeBrainTwin() {
-  const { report } = useStudy()
+  const { report, study } = useStudy()
   const {
     regions, toggleRegion, setOpacity, isolated, setIsolated,
     wireframe, setWireframe, brainVisible, toggleBrain, brainOpacity, setBrainOpacity,
     voxel, clippingEnabled, setClippingEnabled, clippingAxis, setClippingAxis,
     clippingOffset, setClippingOffset,
   } = useStore()
-  const { study } = useStudy()
   const world = voxelToWorld(study.affine, voxel[0], voxel[1], voxel[2])
+
+  // Collapsible HUD and Slice Plane Controls
+  const [hudCollapsed, setHudCollapsed] = useState(false)
+  const [legendCollapsed, setLegendCollapsed] = useState(false)
+  const [activeTab, setActiveTab] = useState<'all' | 'mesh' | 'cutaway' | 'slices'>('all')
+  const [show3DAxial, setShow3DAxial] = useState(true)
+  const [show3DCoronal, setShow3DCoronal] = useState(false)
+  const [show3DSagittal, setShow3DSagittal] = useState(false)
 
   const primary: RegionKey = isolated ?? 'WT'
   const primaryDef = REGIONS.find((r) => r.key === primary)!
@@ -438,195 +559,327 @@ export default function ThreeBrainTwin() {
         camera={{ position: [40, 175, 330], up: [0, 0, 1], fov: 36, near: 1, far: 4000 }}
         onPointerMissed={() => setIsolated(null)}
       >
-        <Scene />
+        <Scene
+          show3DAxial={show3DAxial}
+          show3DCoronal={show3DCoronal}
+          show3DSagittal={show3DSagittal}
+        />
       </Canvas>
 
-      {/* Telemetry HUD */}
-      <div className="pointer-events-none absolute left-3 top-3 rounded-md border border-edge/80 bg-panel/85 px-3 py-2 font-mono text-[10.5px] leading-[1.45] text-slate-300 backdrop-blur-sm">
-        <div className="mb-1 font-sans text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
-          Crosshair telemetry
-        </div>
-        <div>Voxel&nbsp;&nbsp;<span className="text-slate-100">({voxel[0]}, {voxel[1]}, {voxel[2]})</span></div>
-        <div>World&nbsp;&nbsp;<span className="text-sky-300">
-          ({world[0].toFixed(1)}, {world[1].toFixed(1)}, {world[2].toFixed(1)}) mm
-        </span></div>
-        <div className="mt-1 text-slate-500">
-          Grid {study.dims.join('×')} · {study.spacing.map((s) => s.toFixed(2)).join('×')} mm
-        </div>
-      </div>
-
-      {/* Legend */}
-      <div className="absolute right-3 top-3 w-[188px] rounded-md border border-edge/80 bg-panel/85 p-2 backdrop-blur-sm">
-        <div className="mb-1.5 px-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
-          Regions
-        </div>
-        {REGIONS.map((def) => {
-          const ui = regions[def.key]
-          return (
-            <button
-              key={def.key}
-              onClick={() => toggleRegion(def.key)}
-              className={`flex w-full items-center gap-2 rounded px-1.5 py-1 text-left text-[11.5px] transition
-                ${ui.visible ? 'text-slate-200' : 'text-slate-600'} hover:bg-white/5`}
-            >
-              <span
-                className="h-2.5 w-2.5 shrink-0 rounded-[3px] border"
-                style={{
-                  background: ui.visible ? def.colour : 'transparent',
-                  borderColor: def.colour,
-                }}
-              />
-              <span className="flex-1 truncate">{def.label}</span>
-              <span className="font-mono text-[10px] text-slate-500">
-                {report[def.key].predML.toFixed(1)}
-              </span>
-            </button>
-          )
-        })}
+      {/* Collapsible Left HUD: Telemetry, Slicers, Cutaway & 3D Slices */}
+      {hudCollapsed ? (
         <button
-          onClick={toggleBrain}
-          className={`mt-1 flex w-full items-center gap-2 rounded px-1.5 py-1 text-left text-[11.5px] transition
-            ${brainVisible ? 'text-slate-200' : 'text-slate-600'} hover:bg-white/5`}
+          onClick={() => setHudCollapsed(false)}
+          className="group absolute left-3 top-3 z-10 flex items-center gap-2 rounded-md border border-edge/80 bg-panel/90 px-3 py-2 text-[11px] font-medium text-slate-200 shadow-xl backdrop-blur-md transition hover:border-sky-500/50 hover:bg-panel hover:text-white"
+          title="Open 3D Studio Controls & Slicers"
         >
-          <span
-            className="h-2.5 w-2.5 shrink-0 rounded-[3px] border border-slate-400"
-            style={{ background: brainVisible ? '#cfd9e6' : 'transparent' }}
-          />
-          <span className="flex-1">Brain surface</span>
+          <span className="flex h-2 w-2 rounded-full bg-sky-400 group-hover:scale-125 transition-transform" />
+          <span className="font-semibold text-slate-100">Controls &amp; Slicers</span>
+          <span className="rounded bg-sky-500/20 px-1.5 py-0.5 font-mono text-[9px] text-sky-300">Expand ▶</span>
         </button>
-      </div>
-
-      {/* Opacity / cutaway control */}
-      <div className="absolute left-3 top-[92px] w-[232px] rounded-md border border-edge/80 bg-panel/85 px-3 py-2.5 backdrop-blur-sm">
-        <div className="mb-1 flex items-baseline justify-between">
-          <span className="text-[11.5px] font-medium" style={{ color: primaryDef.colour }}>
-            {primaryDef.label}
-          </span>
-          <span className="font-mono text-[10.5px] text-slate-400">
-            {report[primary].predML.toFixed(2)} mL
-          </span>
-        </div>
-        <input
-          type="range"
-          min={0}
-          max={1}
-          step={0.01}
-          value={regions[primary].opacity}
-          onChange={(e) => setOpacity(primary, Number(e.target.value))}
-          className="w-full"
-        />
-        <div className="mt-1.5 flex items-center justify-between">
-          <span className="text-[10px] uppercase tracking-wider text-slate-500">Brain shell</span>
-          <input
-            type="range"
-            min={0}
-            max={0.6}
-            step={0.01}
-            value={brainOpacity}
-            onChange={(e) => setBrainOpacity(Number(e.target.value))}
-            className="w-[108px]"
-          />
-        </div>
-        <div className="mt-2 flex gap-1.5">
-          <button
-            onClick={() => setWireframe(!wireframe)}
-            className={`flex-1 rounded border px-2 py-1 text-[10.5px] transition ${
-              wireframe
-                ? 'border-sky-500/60 bg-sky-500/15 text-sky-300'
-                : 'border-edge text-slate-400 hover:border-slate-500 hover:text-slate-200'
-            }`}
-          >
-            Lattice
-          </button>
-          <button
-            onClick={() => setIsolated(null)}
-            className="flex-1 rounded border border-edge px-2 py-1 text-[10.5px] text-slate-400 transition hover:border-slate-500 hover:text-slate-200"
-          >
-            Reset view
-          </button>
-        </div>
-      </div>
-
-      {/* Cutaway view: a clipping plane through the 3D mesh, a standard visualization
-          technique (same as any CAD/medical-imaging 3D viewer's "cut plane" tool) —
-          named and framed as visualization only. Never call this "surgical" anywhere:
-          CLAUDE.md rule 4 and the PS's own scope rules explicitly exclude surgical/
-          treatment planning, and this tool makes no claim about where an incision
-          would go or any other clinical utility — it only lets you see inside a mesh. */}
-      <div className="absolute left-3 top-[252px] w-[232px] rounded-md border border-edge/80 bg-panel/85 px-3 py-2.5 backdrop-blur-sm">
-        <div className="mb-1.5 flex items-center justify-between">
-          <div className="flex items-center gap-1.5">
-            <span className="font-sans text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400">
-              Cutaway View
-            </span>
-          </div>
-          <button
-            onClick={() => setClippingEnabled(!clippingEnabled)}
-            className={`rounded px-1.5 py-0.5 font-mono text-[9.5px] font-medium transition ${
-              clippingEnabled
-                ? 'bg-sky-500/20 text-sky-300 border border-sky-500/40'
-                : 'bg-panel-2 text-slate-400 hover:text-slate-200 border border-edge'
-            }`}
-          >
-            {clippingEnabled ? 'Active' : 'Off'}
-          </button>
-        </div>
-
-        {clippingEnabled && (
-          <div className="mt-2 space-y-2">
-            <div className="flex gap-1">
-              {(['axial', 'coronal', 'sagittal'] as const).map((axis) => (
-                <button
-                  key={axis}
-                  onClick={() => setClippingAxis(axis)}
-                  className={`flex-1 rounded py-0.5 text-center font-mono text-[9px] uppercase transition ${
-                    clippingAxis === axis
-                      ? 'bg-sky-500/25 font-bold text-sky-200 border border-sky-500/50'
-                      : 'border border-edge text-slate-400 hover:text-slate-200 hover:bg-white/5'
-                  }`}
-                >
-                  {axis === 'axial' ? 'Axial' : axis === 'coronal' ? 'Coronal' : 'Sagittal'}
-                </button>
-              ))}
+      ) : (
+        <div className="absolute left-3 top-3 z-10 w-[240px] max-h-[calc(100%-48px)] flex flex-col overflow-hidden rounded-lg border border-edge/80 bg-panel/90 shadow-2xl backdrop-blur-md transition-all">
+          {/* Panel Header */}
+          <div className="flex shrink-0 items-center justify-between border-b border-edge/80 bg-panel-2/70 px-3 py-2">
+            <div className="flex items-center gap-1.5 font-sans text-[11px] font-semibold text-slate-100">
+              <span className="text-sky-400">⚙</span>
+              <span>Studio Controls</span>
             </div>
+            <button
+              onClick={() => setHudCollapsed(true)}
+              className="flex items-center gap-1 rounded border border-edge/80 bg-panel-2 px-1.5 py-0.5 font-mono text-[9px] text-slate-300 transition hover:border-sky-500/50 hover:bg-sky-500/20 hover:text-sky-200"
+              title="Narrow down / collapse controls to view brain smoothly"
+            >
+              <span>Narrow Down</span>
+              <span>◀</span>
+            </button>
+          </div>
 
-            <div>
-              <div className="mb-1 flex items-center justify-between font-mono text-[9.5px] text-slate-400">
-                <span>Cut Depth</span>
-                <span className="text-sky-300">{clippingOffset.toFixed(1)} mm</span>
+          {/* Segmented Filter Bar */}
+          <div className="flex shrink-0 border-b border-edge/60 bg-panel/60 p-1 text-[9.5px] font-mono">
+            {(['all', 'mesh', 'cutaway', 'slices'] as const).map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setActiveTab(tab)}
+                className={`flex-1 rounded py-1 capitalize transition ${
+                  activeTab === tab
+                    ? 'bg-sky-500/20 font-bold text-sky-200 border border-sky-500/40'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                {tab === 'all' ? 'All' : tab === 'mesh' ? 'Mesh' : tab === 'cutaway' ? 'Cut' : '3D Slices'}
+              </button>
+            ))}
+          </div>
+
+          {/* Scrollable Content Body */}
+          <div className="flex-1 space-y-2.5 overflow-y-auto p-2.5 text-[10.5px]">
+            {/* Telemetry (visible in 'all' or 'slices') */}
+            {(activeTab === 'all' || activeTab === 'slices') && (
+              <div className="rounded border border-edge/60 bg-panel-2/40 p-2 font-mono text-[10px] text-slate-300">
+                <div className="mb-1 text-[9px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                  Crosshair Position
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">Voxel:</span>
+                  <span className="text-slate-100 font-semibold">({voxel[0]}, {voxel[1]}, {voxel[2]})</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-500">World:</span>
+                  <span className="text-sky-300">({world[0].toFixed(1)}, {world[1].toFixed(1)}, {world[2].toFixed(1)}) mm</span>
+                </div>
+                <div className="mt-1 text-slate-500 text-[9px]">
+                  Grid {study.dims.join('×')} · {study.spacing.map((s) => s.toFixed(2)).join('×')} mm
+                </div>
               </div>
-              <input
-                type="range"
-                min={-120}
-                max={120}
-                step={1}
-                value={clippingOffset}
-                onChange={(e) => setClippingOffset(Number(e.target.value))}
-                className="w-full"
-              />
-            </div>
+            )}
 
-            <div className="flex justify-between items-center pt-0.5 text-[9px] font-mono">
-              <button
-                onClick={() => setClippingOffset(0)}
-                className="text-slate-500 hover:text-slate-300 transition"
-              >
-                Reset (0mm)
-              </button>
-              <button
-                onClick={() => setClippingOffset(-clippingOffset)}
-                className="text-slate-500 hover:text-sky-400 transition"
-                title="Invert clipping side"
-              >
-                Invert Cut
-              </button>
-            </div>
+            {/* 3D In-Scene Slice Planes (visible in 'all' or 'slices') */}
+            {(activeTab === 'all' || activeTab === 'slices') && (
+              <div className="rounded border border-edge/60 bg-panel-2/40 p-2 space-y-1.5">
+                <div className="flex items-center justify-between text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-400">
+                  <span>3D In-Scene Slices</span>
+                  <button
+                    onClick={() => {
+                      const anyOn = show3DAxial || show3DCoronal || show3DSagittal
+                      setShow3DAxial(!anyOn)
+                      setShow3DCoronal(!anyOn)
+                      setShow3DSagittal(!anyOn)
+                    }}
+                    className="text-[9px] font-mono lowercase text-sky-400 hover:underline"
+                  >
+                    {show3DAxial || show3DCoronal || show3DSagittal ? 'all off' : 'all on'}
+                  </button>
+                </div>
+                <p className="text-[9.5px] text-slate-400 leading-tight">
+                  Intersect 2D MPR planes directly into the 3D brain twin:
+                </p>
+                <div className="grid grid-cols-3 gap-1 font-mono text-[9px]">
+                  <button
+                    onClick={() => setShow3DAxial(!show3DAxial)}
+                    className={`rounded py-1 text-center transition border ${
+                      show3DAxial
+                        ? 'border-sky-500/60 bg-sky-500/20 text-sky-200 font-bold'
+                        : 'border-edge text-slate-500 hover:text-slate-300'
+                    }`}
+                  >
+                    Axial Z
+                  </button>
+                  <button
+                    onClick={() => setShow3DCoronal(!show3DCoronal)}
+                    className={`rounded py-1 text-center transition border ${
+                      show3DCoronal
+                        ? 'border-emerald-500/60 bg-emerald-500/20 text-emerald-200 font-bold'
+                        : 'border-edge text-slate-500 hover:text-slate-300'
+                    }`}
+                  >
+                    Coronal Y
+                  </button>
+                  <button
+                    onClick={() => setShow3DSagittal(!show3DSagittal)}
+                    className={`rounded py-1 text-center transition border ${
+                      show3DSagittal
+                        ? 'border-amber-500/60 bg-amber-500/20 text-amber-200 font-bold'
+                        : 'border-edge text-slate-500 hover:text-slate-300'
+                    }`}
+                  >
+                    Sagittal X
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Opacity / Shell controls (visible in 'all' or 'mesh') */}
+            {(activeTab === 'all' || activeTab === 'mesh') && (
+              <div className="rounded border border-edge/60 bg-panel-2/40 p-2 space-y-2">
+                <div className="flex items-baseline justify-between text-[11px]">
+                  <span className="font-medium" style={{ color: primaryDef.colour }}>
+                    {primaryDef.label}
+                  </span>
+                  <span className="font-mono text-[10px] text-slate-400">
+                    {report[primary].predML.toFixed(2)} mL
+                  </span>
+                </div>
+                <input
+                  type="range"
+                  min={0}
+                  max={1}
+                  step={0.01}
+                  value={regions[primary].opacity}
+                  onChange={(e) => setOpacity(primary, Number(e.target.value))}
+                  className="w-full accent-sky-400"
+                />
+                <div className="flex items-center justify-between pt-1">
+                  <span className="text-[10px] uppercase tracking-wider text-slate-500">Brain shell</span>
+                  <input
+                    type="range"
+                    min={0}
+                    max={0.6}
+                    step={0.01}
+                    value={brainOpacity}
+                    onChange={(e) => setBrainOpacity(Number(e.target.value))}
+                    className="w-[100px] accent-sky-400"
+                  />
+                </div>
+                <div className="flex gap-1.5 pt-1">
+                  <button
+                    onClick={() => setWireframe(!wireframe)}
+                    className={`flex-1 rounded border px-2 py-1 text-[10px] transition ${
+                      wireframe
+                        ? 'border-sky-500/60 bg-sky-500/15 text-sky-300'
+                        : 'border-edge text-slate-400 hover:border-slate-500 hover:text-slate-200'
+                    }`}
+                  >
+                    Lattice
+                  </button>
+                  <button
+                    onClick={() => setIsolated(null)}
+                    className="flex-1 rounded border border-edge px-2 py-1 text-[10px] text-slate-400 transition hover:border-slate-500 hover:text-slate-200"
+                  >
+                    Reset view
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Cutaway controls (visible in 'all' or 'cutaway') */}
+            {(activeTab === 'all' || activeTab === 'cutaway') && (
+              <div className="rounded border border-edge/60 bg-panel-2/40 p-2 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-sans text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400">
+                    Cutaway View
+                  </span>
+                  <button
+                    onClick={() => setClippingEnabled(!clippingEnabled)}
+                    className={`rounded px-1.5 py-0.5 font-mono text-[9px] font-medium transition ${
+                      clippingEnabled
+                        ? 'bg-sky-500/20 text-sky-300 border border-sky-500/40'
+                        : 'bg-panel text-slate-400 hover:text-slate-200 border border-edge'
+                    }`}
+                  >
+                    {clippingEnabled ? 'Active' : 'Off'}
+                  </button>
+                </div>
+
+                {clippingEnabled && (
+                  <div className="space-y-2 pt-1">
+                    <div className="flex gap-1 font-mono text-[9px]">
+                      {(['axial', 'coronal', 'sagittal'] as const).map((axis) => (
+                        <button
+                          key={axis}
+                          onClick={() => setClippingAxis(axis)}
+                          className={`flex-1 rounded py-0.5 text-center uppercase transition ${
+                            clippingAxis === axis
+                              ? 'bg-sky-500/25 font-bold text-sky-200 border border-sky-500/50'
+                              : 'border border-edge text-slate-400 hover:text-slate-200'
+                          }`}
+                        >
+                          {axis.slice(0, 3)}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div>
+                      <div className="mb-1 flex items-center justify-between font-mono text-[9px] text-slate-400">
+                        <span>Depth</span>
+                        <span className="text-sky-300">{clippingOffset.toFixed(1)} mm</span>
+                      </div>
+                      <input
+                        type="range"
+                        min={-120}
+                        max={120}
+                        step={1}
+                        value={clippingOffset}
+                        onChange={(e) => setClippingOffset(Number(e.target.value))}
+                        className="w-full accent-sky-400"
+                      />
+                    </div>
+
+                    <div className="flex justify-between items-center text-[9px] font-mono">
+                      <button
+                        onClick={() => setClippingOffset(0)}
+                        className="text-slate-500 hover:text-slate-300 transition"
+                      >
+                        Reset (0mm)
+                      </button>
+                      <button
+                        onClick={() => setClippingOffset(-clippingOffset)}
+                        className="text-slate-500 hover:text-sky-400 transition"
+                      >
+                        Invert Cut
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
-        )}
-      </div>
+        </div>
+      )}
+
+      {/* Collapsible Right Legend */}
+      {legendCollapsed ? (
+        <button
+          onClick={() => setLegendCollapsed(false)}
+          className="absolute right-3 top-3 z-10 flex items-center gap-1.5 rounded-md border border-edge/80 bg-panel/90 px-2.5 py-1.5 font-mono text-[10px] text-slate-300 shadow-xl backdrop-blur-sm transition hover:border-slate-500 hover:text-white"
+          title="Show Region Legend"
+        >
+          <span>🏷 Regions</span>
+          <span>◀</span>
+        </button>
+      ) : (
+        <div className="absolute right-3 top-3 z-10 w-[188px] rounded-md border border-edge/80 bg-panel/90 p-2 shadow-2xl backdrop-blur-sm">
+          <div className="mb-1.5 flex items-center justify-between px-1">
+            <span className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+              Regions
+            </span>
+            <button
+              onClick={() => setLegendCollapsed(true)}
+              className="text-[9.5px] text-slate-500 hover:text-slate-300 font-mono transition"
+              title="Narrow down / collapse legend"
+            >
+              ✕
+            </button>
+          </div>
+          {REGIONS.map((def) => {
+            const ui = regions[def.key]
+            return (
+              <button
+                key={def.key}
+                onClick={() => toggleRegion(def.key)}
+                className={`flex w-full items-center gap-2 rounded px-1.5 py-1 text-left text-[11.5px] transition
+                  ${ui.visible ? 'text-slate-200' : 'text-slate-600'} hover:bg-white/5`}
+              >
+                <span
+                  className="h-2.5 w-2.5 shrink-0 rounded-[3px] border"
+                  style={{
+                    background: ui.visible ? def.colour : 'transparent',
+                    borderColor: def.colour,
+                  }}
+                />
+                <span className="flex-1 truncate">{def.label}</span>
+                <span className="font-mono text-[10px] text-slate-500">
+                  {report[def.key].predML.toFixed(1)}
+                </span>
+              </button>
+            )
+          })}
+          <button
+            onClick={toggleBrain}
+            className={`mt-1 flex w-full items-center gap-2 rounded px-1.5 py-1 text-left text-[11.5px] transition
+              ${brainVisible ? 'text-slate-200' : 'text-slate-600'} hover:bg-white/5`}
+          >
+            <span
+              className="h-2.5 w-2.5 shrink-0 rounded-[3px] border border-slate-400"
+              style={{ background: brainVisible ? '#cfd9e6' : 'transparent' }}
+            />
+            <span className="flex-1">Brain surface</span>
+          </button>
+        </div>
+      )}
 
       {isolated && (
-        <div className="absolute left-1/2 top-3 -translate-x-1/2 rounded-full border border-sky-500/40 bg-sky-500/10 px-3 py-1 text-[10.5px] text-sky-300 backdrop-blur-sm">
+        <div className="absolute left-1/2 top-3 -translate-x-1/2 z-10 rounded-full border border-sky-500/40 bg-sky-500/10 px-3 py-1 text-[10.5px] text-sky-300 backdrop-blur-sm">
           Isolated · {primaryDef.label} — click empty space to exit
         </div>
       )}

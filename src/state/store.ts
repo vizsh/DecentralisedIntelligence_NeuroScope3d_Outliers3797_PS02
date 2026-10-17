@@ -92,6 +92,9 @@ interface State {
   assistantOpen: boolean
   setAssistantOpen: (open: boolean) => void
 
+  formulaSheetOpen: boolean
+  setFormulaSheetOpen: (open: boolean) => void
+
   /** Roadmap Section 6 Viewer Modes: Anatomy, Segmentation, Exploration */
   viewer3DMode: 'anatomy' | 'segmentation' | 'exploration'
   setViewer3DMode: (mode: 'anatomy' | 'segmentation' | 'exploration') => void
@@ -171,6 +174,9 @@ export const useStore = create<State>((set) => ({
 
   assistantOpen: false,
   setAssistantOpen: (assistantOpen) => set({ assistantOpen }),
+
+  formulaSheetOpen: false,
+  setFormulaSheetOpen: (formulaSheetOpen) => set({ formulaSheetOpen }),
 
   viewer3DMode: 'segmentation',
   setViewer3DMode: (viewer3DMode) => {

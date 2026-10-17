@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { SEQUENCES, type SequenceName, type Vec3 } from '../lib/volume'
 import { useStore } from '../state/store'
 import { useStudy } from '../state/study'
@@ -25,6 +25,8 @@ const ICONS = {
   reset: 'M3 12a9 9 0 109-9 9 9 0 00-6.4 2.7L3 8M3 3v5h5',
   pulse: 'M3 12h4l2-7 4 14 2-7h6',
   agreement: 'M10 8a4 4 0 100 8 4 4 0 000-8zM14 8a4 4 0 100 8 4 4 0 000-8z',
+  play: 'M5 3l14 9-14 9V3z',
+  pause: 'M6 4h4v16H6zM14 4h4v16h-4z',
 }
 
 function ToolButton({
@@ -53,8 +55,19 @@ export default function LinkedMprGrid() {
     overlayMode, setOverlayMode,
     tool, setTool, measure, clearMeasure,
     windowCenter, windowWidth, resetWindow,
+    voxel,
   } = useStore()
   const [compareSeq, setCompareSeq] = useState<SequenceName>('FLAIR')
+  const [cinePlaying, setCinePlaying] = useState(false)
+
+  // Auto-Slice Cine Loop: automatically sweeps axial slices back and forth
+  useEffect(() => {
+    if (!cinePlaying) return
+    const timer = setInterval(() => {
+      setVoxel([voxel[0], voxel[1], (voxel[2] + 1) % study.dims[2]])
+    }, 120)
+    return () => clearInterval(timer)
+  }, [cinePlaying, voxel, study.dims, setVoxel])
 
   // Agreement needs something to disagree with: the demo phantom always has an
   // expert mask, a live study only when one was uploaded.
@@ -218,6 +231,12 @@ export default function LinkedMprGrid() {
           />
         )}
         <ToolButton title="Jump to tumour centroid (T)" path={ICONS.target} onClick={centreOnTumour} />
+        <ToolButton
+          title={cinePlaying ? "Pause Auto-Slice Cine Sweep (Space)" : "Play Auto-Slice Cine Sweep (Continuous loop across axial slices)"}
+          path={cinePlaying ? ICONS.pause : ICONS.play}
+          active={cinePlaying}
+          onClick={() => setCinePlaying(!cinePlaying)}
+        />
         <div className="my-1 h-px w-5 bg-edge" />
         <ToolButton
           title={`Window / contrast — drag on a view: up brightens, right widens (W). Now ${windowCenter}/${windowWidth}`}

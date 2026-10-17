@@ -27,6 +27,7 @@ export default function ViewerWorkspace() {
   const [showBookmarks, setShowBookmarks] = useState(false)
   const [bookmarkLabel, setBookmarkLabel] = useState('')
   const [copiedSnapshot, setCopiedSnapshot] = useState(false)
+  const [layoutMode, setLayoutMode] = useState<'split' | '3d-focus' | 'mpr-focus' | '3d-max' | 'mpr-max'>('split')
 
   // Calculate measurement distance in physical mm if 2 points exist
   let measurementMm: number | null = null
@@ -140,6 +141,55 @@ export default function ViewerWorkspace() {
             </button>
           </div>
 
+          {/* Studio Layout Switcher */}
+          <div className="flex rounded border border-edge bg-panel-2 p-0.5 font-mono text-[10px]">
+            <button
+              onClick={() => setLayoutMode('split')}
+              className={`rounded px-1.5 py-0.5 transition ${
+                layoutMode === 'split' ? 'bg-sky-500/25 text-sky-200 font-bold' : 'text-slate-400 hover:text-slate-200'
+              }`}
+              title="Split View: 50% 3D Twin / 50% Slices"
+            >
+              ⊞ Split
+            </button>
+            <button
+              onClick={() => setLayoutMode('3d-focus')}
+              className={`rounded px-1.5 py-0.5 transition ${
+                layoutMode === '3d-focus' ? 'bg-sky-500/25 text-sky-200 font-bold' : 'text-slate-400 hover:text-slate-200'
+              }`}
+              title="3D Focus: Expansive 3D Twin, compact slices"
+            >
+              ◧ 3D
+            </button>
+            <button
+              onClick={() => setLayoutMode('mpr-focus')}
+              className={`rounded px-1.5 py-0.5 transition ${
+                layoutMode === 'mpr-focus' ? 'bg-sky-500/25 text-sky-200 font-bold' : 'text-slate-400 hover:text-slate-200'
+              }`}
+              title="Slice Focus: Expansive 4-panel slice quad, compact 3D"
+            >
+              ◨ Slices
+            </button>
+            <button
+              onClick={() => setLayoutMode(layoutMode === '3d-max' ? 'split' : '3d-max')}
+              className={`rounded px-1.5 py-0.5 transition ${
+                layoutMode === '3d-max' ? 'bg-indigo-500/30 text-indigo-200 font-bold border border-indigo-500/40' : 'text-slate-400 hover:text-slate-200'
+              }`}
+              title="Maximize 3D Twin (100% full-screen 3D)"
+            >
+              {layoutMode === '3d-max' ? '✕ Exit Max' : '⛶ 3D'}
+            </button>
+            <button
+              onClick={() => setLayoutMode(layoutMode === 'mpr-max' ? 'split' : 'mpr-max')}
+              className={`rounded px-1.5 py-0.5 transition ${
+                layoutMode === 'mpr-max' ? 'bg-indigo-500/30 text-indigo-200 font-bold border border-indigo-500/40' : 'text-slate-400 hover:text-slate-200'
+              }`}
+              title="Maximize Slices (100% full-screen 4-panel slice quad)"
+            >
+              {layoutMode === 'mpr-max' ? '✕ Exit Max' : '⛶ Slices'}
+            </button>
+          </div>
+
           <button
             onClick={() => setShowBookmarks(!showBookmarks)}
             className={`rounded border px-2 py-1 font-medium transition ${
@@ -199,9 +249,19 @@ export default function ViewerWorkspace() {
 
       {/* Main 3D + MPR Split View */}
       <div className="relative flex min-h-0 flex-1 overflow-hidden">
-        <main className="grid min-h-0 flex-1 grid-cols-2 gap-2 p-2">
-          <ThreeBrainTwin />
-          <LinkedMprGrid />
+        <main
+          className={`grid min-h-0 flex-1 gap-2 p-2 ${
+            layoutMode === 'split'
+              ? 'grid-cols-2'
+              : layoutMode === '3d-focus'
+              ? 'grid-cols-[1.65fr_1fr]'
+              : layoutMode === 'mpr-focus'
+              ? 'grid-cols-[1fr_1.65fr]'
+              : 'grid-cols-1'
+          }`}
+        >
+          {layoutMode !== 'mpr-max' && <ThreeBrainTwin />}
+          {layoutMode !== '3d-max' && <LinkedMprGrid />}
         </main>
 
         {/* Spatial Bookmarks Drawer */}

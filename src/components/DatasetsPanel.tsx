@@ -10,7 +10,18 @@ const SOURCE_LABEL: Record<api.SampleInfo['source'], string> = {
   decathlon: 'real — Decathlon Task01_BrainTumour',
 }
 
-function SampleCard({ sample, onRun, running }: { sample: api.SampleInfo; onRun: () => void; running: boolean }) {
+function SampleCard({
+  sample,
+  onRun,
+  running,
+  blocked,
+}: {
+  sample: api.SampleInfo
+  onRun: () => void
+  running: boolean
+  /** another sample (or upload) is already running on the single-worker backend */
+  blocked: boolean
+}) {
   return (
     <div
       className={`flex min-w-0 flex-col gap-1.5 rounded-md border px-3 py-2.5 transition ${
@@ -34,7 +45,8 @@ function SampleCard({ sample, onRun, running }: { sample: api.SampleInfo; onRun:
         </span>
         <button
           onClick={onRun}
-          disabled={!sample.available || running}
+          disabled={!sample.available || running || blocked}
+          title={blocked ? 'Another case is already running on the local server — wait for it to finish.' : undefined}
           className="rounded border border-sky-500/50 bg-sky-500/10 px-2.5 py-1 text-[10.5px] font-medium text-sky-300 transition hover:bg-sky-500/20 disabled:cursor-not-allowed disabled:opacity-40"
         >
           {running ? 'Running…' : sample.available ? 'Run this case' : 'Not staged on server'}
@@ -47,7 +59,9 @@ function SampleCard({ sample, onRun, running }: { sample: api.SampleInfo; onRun:
 export default function DatasetsPanel() {
   const open = useStore((s) => s.datasetsOpen)
   const setOpen = useStore((s) => s.setDatasetsOpen)
-  const { status, errors, stage, stageMessage, runSample, reset, activeSampleId } = useLiveStudy()
+  const { status, errors, stage, stageMessage, queuePosition, queueEtaSeconds, runSample, reset, activeSampleId } =
+    useLiveStudy()
+  const runInFlight = status === 'uploading'
   const [samples, setSamples] = useState<api.SampleInfo[] | null>(null)
   const loadedOnce = useRef(false)
 
@@ -84,8 +98,10 @@ export default function DatasetsPanel() {
 
         <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
           <button
-            onClick={() => { reset(); setOpen(false) }}
-            className="flex w-full min-w-0 items-center justify-between rounded-md border border-edge bg-panel-2/60 px-3 py-2.5 text-left transition hover:border-slate-500"
+            onClick={() => { if (!runInFlight) { reset(); setOpen(false) } }}
+            disabled={runInFlight}
+            title={runInFlight ? 'A real case is still running on the local server — this would stop watching it, not cancel it.' : undefined}
+            className="flex w-full min-w-0 items-center justify-between rounded-md border border-edge bg-panel-2/60 px-3 py-2.5 text-left transition hover:border-slate-500 disabled:cursor-not-allowed disabled:opacity-40"
           >
             <span>
               <span className="block text-[12px] font-semibold text-slate-200">Procedural demo phantom</span>
@@ -112,7 +128,8 @@ export default function DatasetsPanel() {
             <SampleCard
               key={s.id}
               sample={s}
-              running={status === 'uploading' && activeSampleId === s.id}
+              running={runInFlight && activeSampleId === s.id}
+              blocked={runInFlight && activeSampleId !== s.id}
               onRun={() => runSample(s.id)}
             />
           ))}
@@ -122,7 +139,11 @@ export default function DatasetsPanel() {
           <div className="mt-3 rounded-md border border-sky-600/40 bg-sky-500/5 px-2.5 py-2">
             <div className="flex items-center gap-2">
               <span className="h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-sky-400/30 border-t-sky-400" />
-              <span className="font-mono text-[11px] text-sky-300">{stageMessage ?? 'Starting…'}</span>
+              <span className="font-mono text-[11px] text-sky-300">
+                {stage === 'queued' && queuePosition != null
+                  ? `Queued — position ${queuePosition + 1}${queueEtaSeconds != null ? `, ~${Math.round(queueEtaSeconds)}s` : ''}`
+                  : stageMessage ?? 'Starting…'}
+              </span>
             </div>
             <div className="mt-2 flex gap-1">
               {PIPELINE.map((s) => {

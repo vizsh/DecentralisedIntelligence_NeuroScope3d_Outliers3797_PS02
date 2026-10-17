@@ -2,6 +2,7 @@ import AssistantPanel from './components/AssistantPanel'
 import BottomActivityStrip from './components/BottomActivityStrip'
 import DatasetsPanel from './components/DatasetsPanel'
 import DisclaimerBanner from './components/DisclaimerBanner'
+import FormulaSheetModal from './components/FormulaSheetModal'
 import HelpPanel from './components/HelpPanel'
 import NavigationSidebar from './components/NavigationSidebar'
 import TopBar from './components/TopBar'
@@ -56,6 +57,7 @@ export default function App() {
       <DatasetsPanel />
       <HelpPanel />
       <AssistantPanel />
+      <FormulaSheetModal />
 
       {/* Main Workspace Layout */}
       <div className="flex min-h-0 flex-1 overflow-hidden">

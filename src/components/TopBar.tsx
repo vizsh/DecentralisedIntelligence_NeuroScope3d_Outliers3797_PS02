@@ -19,15 +19,28 @@ export default function TopBar() {
   const bundle = useStudyOptional()
   const setUploadOpen = useStore((s) => s.setUploadOpen)
   const setDatasetsOpen = useStore((s) => s.setDatasetsOpen)
+  const setFormulaSheetOpen = useStore((s) => s.setFormulaSheetOpen)
   const reset = useLiveStudy((s) => s.reset)
   const runSample = useLiveStudy((s) => s.runSample)
+  const liveStatus = useLiveStudy((s) => s.status)
+  const liveStage = useLiveStudy((s) => s.stage)
+  const liveStageMessage = useLiveStudy((s) => s.stageMessage)
+  const queuePosition = useLiveStudy((s) => s.queuePosition)
+  const queueEtaSeconds = useLiveStudy((s) => s.queueEtaSeconds)
 
   const selectedStudyId = useWorkspaceStore((s) => s.selectedStudyId)
   const setSelectedStudyId = useWorkspaceStore((s) => s.setSelectedStudyId)
   const activeWorkspace = useWorkspaceStore((s) => s.activeWorkspace)
   const setActiveWorkspace = useWorkspaceStore((s) => s.setActiveWorkspace)
 
+  // The backend processes one real segmentation at a time (~90-150s each on
+  // CPU) — switching the study again mid-run doesn't cancel the first job,
+  // it just queues a second one behind it. So the selector locks while a run
+  // is in flight rather than letting clicks silently pile up on the server.
+  const runInFlight = liveStatus === 'uploading'
+
   const handleStudyChange = (studyId: string) => {
+    if (runInFlight) return
     setSelectedStudyId(studyId)
     if (studyId === 'demo_phantom') {
       reset()
@@ -63,7 +76,9 @@ export default function TopBar() {
         <select
           value={bundle?.mode === 'live' && bundle.study.caseId ? bundle.study.caseId.toLowerCase() : selectedStudyId}
           onChange={(e) => handleStudyChange(e.target.value)}
-          className="rounded border border-edge bg-panel-2 px-2.5 py-1 text-[11.5px] font-medium text-slate-200 focus:border-sky-500 focus:outline-none"
+          disabled={runInFlight}
+          title={runInFlight ? 'A study is already running on the local server — wait for it to finish before switching.' : undefined}
+          className="rounded border border-edge bg-panel-2 px-2.5 py-1 text-[11.5px] font-medium text-slate-200 focus:border-sky-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
         >
           {SAMPLES_LIST.map((s) => (
             <option key={s.id} value={s.id}>
@@ -72,15 +87,24 @@ export default function TopBar() {
           ))}
         </select>
 
-        {bundle && (
-          <span className="hidden items-center gap-1.5 font-mono text-[10px] text-slate-400 lg:flex">
-            <span
-              className={`h-1.5 w-1.5 rounded-full pulse-ring ${
-                bundle.mode === 'live' ? 'bg-sky-400' : 'bg-emerald-400'
-              }`}
-            />
-            {bundle.mode === 'live' ? 'LIVE BACKEND' : 'LOCAL PHANTOM'}
+        {runInFlight ? (
+          <span className="flex items-center gap-1.5 font-mono text-[10px] text-sky-300">
+            <span className="h-3 w-3 shrink-0 animate-spin rounded-full border-2 border-sky-400/30 border-t-sky-400" />
+            {liveStage === 'queued' && queuePosition != null
+              ? `Queued (position ${queuePosition + 1}${queueEtaSeconds != null ? `, ~${Math.round(queueEtaSeconds)}s` : ''})`
+              : liveStageMessage ?? 'Running…'}
           </span>
+        ) : (
+          bundle && (
+            <span className="hidden items-center gap-1.5 font-mono text-[10px] text-slate-400 lg:flex">
+              <span
+                className={`h-1.5 w-1.5 rounded-full pulse-ring ${
+                  bundle.mode === 'live' ? 'bg-sky-400' : 'bg-emerald-400'
+                }`}
+              />
+              {bundle.mode === 'live' ? 'LIVE BACKEND' : 'LOCAL PHANTOM'}
+            </span>
+          )
         )}
       </div>
 
@@ -94,6 +118,15 @@ export default function TopBar() {
 
       {/* Actions */}
       <div className="ml-auto flex items-center gap-2.5">
+        <button
+          onClick={() => setFormulaSheetOpen(true)}
+          className="flex items-center gap-1.5 rounded border border-sky-500/40 bg-sky-500/10 px-2.5 py-1 text-[11px] font-medium text-sky-300 transition hover:bg-sky-500/20"
+          title="Open Formula Sheet & Math Reference Glossary"
+        >
+          <span>📐</span>
+          <span>Formula Sheet</span>
+        </button>
+
         <button
           onClick={() => setDatasetsOpen(true)}
           className="hidden rounded border border-edge bg-panel-2 px-2.5 py-1 text-[11px] text-slate-300 transition hover:border-slate-500 hover:text-slate-100 sm:inline"
