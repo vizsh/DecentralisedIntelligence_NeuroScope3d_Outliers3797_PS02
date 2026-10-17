@@ -128,6 +128,10 @@ export interface Stage {
   stage: string
   message: string
   at: number
+  /** Present only while stage === 'queued': 0 = next in line. */
+  queue_position?: number
+  /** Present only while stage === 'queued': a measured-average estimate, not a guarantee. */
+  eta_seconds?: number
 }
 
 export async function pollStage(jobId: string): Promise<Stage | null> {
@@ -212,7 +216,7 @@ export async function runSample(sampleId: string, jobId: string): Promise<Segmen
   }
   const body = await res.json().catch(() => ({}))
   if (!res.ok) {
-    throw new ApiError(body.errors ?? [{ code: 'error', sequence: null, message: body.detail ?? `Request failed (HTTP ${res.status}).` }])
+    throw new ApiError(body.errors ?? [{ code: body.code ?? 'error', sequence: null, message: body.message ?? body.detail ?? `Request failed (HTTP ${res.status}).` }])
   }
   return body as SegmentResult
 }
@@ -235,7 +239,7 @@ export async function submitStudy(jobId: string, files: UploadFiles): Promise<Se
   }
   const body = await res.json().catch(() => ({}))
   if (!res.ok) {
-    throw new ApiError(body.errors ?? [{ code: 'error', sequence: null, message: body.detail ?? `Request failed (HTTP ${res.status}).` }])
+    throw new ApiError(body.errors ?? [{ code: body.code ?? 'error', sequence: null, message: body.message ?? body.detail ?? `Request failed (HTTP ${res.status}).` }])
   }
   return body as SegmentResult
 }
@@ -372,8 +376,8 @@ export async function assistantAsk(
     body: JSON.stringify({ question, job_id: jobId, mode }),
   })
   if (!res.ok) {
-    const detail = await res.json().catch(() => null)
-    throw new AssistantError(detail?.detail || `Assistant request failed (${res.status}).`)
+    const body = await res.json().catch(() => null)
+    throw new AssistantError(body?.message || body?.detail || `Assistant request failed (${res.status}).`)
   }
   return await res.json()
 }

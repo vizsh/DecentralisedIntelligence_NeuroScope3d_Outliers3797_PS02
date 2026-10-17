@@ -11,6 +11,9 @@ interface LiveState {
   /** live pipeline stage while uploading — "validating", "segmenting", etc. */
   stage: string | null
   stageMessage: string | null
+  /** set only while stage === 'queued' */
+  queuePosition: number | null
+  queueEtaSeconds: number | null
   /** bumped on every successful submit or reset, so StudyProvider knows to rebuild */
   generation: number
   /** which sample is currently running, if this run was started from the Datasets panel */
@@ -27,6 +30,8 @@ export const useLiveStudy = create<LiveState>((set, get) => ({
   errors: [],
   stage: null,
   stageMessage: null,
+  queuePosition: null,
+  queueEtaSeconds: null,
   generation: 0,
   activeSampleId: null,
 
@@ -38,7 +43,7 @@ export const useLiveStudy = create<LiveState>((set, get) => ({
     const poll = async () => {
       while (polling) {
         const s = await api.pollStage(jobId)
-        if (s && get().jobId === jobId) set({ stage: s.stage, stageMessage: s.message })
+        if (s && get().jobId === jobId) set({ stage: s.stage, stageMessage: s.message, queuePosition: s.queue_position ?? null, queueEtaSeconds: s.eta_seconds ?? null })
         await new Promise((r) => setTimeout(r, 400))
       }
     }
@@ -70,7 +75,7 @@ export const useLiveStudy = create<LiveState>((set, get) => ({
     const poll = async () => {
       while (polling) {
         const s = await api.pollStage(jobId)
-        if (s && get().jobId === jobId) set({ stage: s.stage, stageMessage: s.message })
+        if (s && get().jobId === jobId) set({ stage: s.stage, stageMessage: s.message, queuePosition: s.queue_position ?? null, queueEtaSeconds: s.eta_seconds ?? null })
         await new Promise((r) => setTimeout(r, 400))
       }
     }

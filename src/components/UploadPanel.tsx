@@ -19,7 +19,7 @@ import { useLiveStudy } from '../state/liveStudy'
 import { useStore } from '../state/store'
 import { useWorkspaceStore } from '../state/workspaceStore'
 
-const PIPELINE = ['received', 'validating', 'resampling', 'segmenting', 'measuring', 'meshing', 'reporting', 'done']
+const PIPELINE = ['queued', 'received', 'validating', 'resampling', 'segmenting', 'measuring', 'meshing', 'reporting', 'done']
 
 const REQUIRED: { key: Slot; label: string; hint: string }[] = [
   { key: 'T1', label: 'T1', hint: 'native T1-weighted anatomical' },
@@ -164,7 +164,7 @@ function Dropzone({
 export default function UploadPanel() {
   const open = useStore((s) => s.uploadOpen)
   const setOpen = useStore((s) => s.setUploadOpen)
-  const { status, errors, stage, stageMessage, submit, reset } = useLiveStudy()
+  const { status, errors, stage, stageMessage, queuePosition, queueEtaSeconds, submit, reset } = useLiveStudy()
   const [files, setFiles] = useState<Record<Slot, File | null>>({
     T1: null,
     T1Gd: null,
@@ -489,6 +489,12 @@ export default function UploadPanel() {
               <span className="h-3.5 w-3.5 shrink-0 animate-spin rounded-full border-2 border-sky-400/30 border-t-sky-400" />
               <span className="font-mono text-[11px] text-sky-300">{stageMessage ?? 'Processing pipeline…'}</span>
             </div>
+            {stage === 'queued' && queuePosition !== null && (
+              <p className="mt-1 pl-5 font-mono text-[10px] text-amber-300">
+                {queuePosition === 0 ? 'Next in line' : `Position ${queuePosition + 1} in queue`}
+                {queueEtaSeconds !== null && ` · ~${Math.round(queueEtaSeconds)}s estimated wait`}
+              </p>
+            )}
             <div className="mt-2 flex gap-1">
               {PIPELINE.map((s) => {
                 const i = PIPELINE.indexOf(s)

@@ -79,6 +79,7 @@ PROGRESS: dict[str, dict] = {}
 _current_job: str | None = None
 
 STAGES = {
+    "queued": "Waiting for the current study to finish…",
     "received": "Upload received, validating…",
     "validating": "Checking geometry, orientation and anatomy…",
     "resampling": "Reorienting and resampling onto the working grid…",
@@ -90,13 +91,74 @@ STAGES = {
 }
 
 
-def report_stage(job: str, stage: str) -> None:
+def report_stage(job: str, stage: str, **extra) -> None:
     now = time.time()
     with _progress_lock:
         previous = PROGRESS.get(job)
-        PROGRESS[job] = {"stage": stage, "message": STAGES[stage], "at": now}
+        PROGRESS[job] = {"stage": stage, "message": STAGES[stage], "at": now, **extra}
     elapsed = f" (+{now - previous['at']:.2f}s)" if previous else ""
     log.info("job %s -> %s%s", job, stage, elapsed)
+
+
+# ------------------------------------------------------------------ job queue
+# A FIFO queue of job ids waiting their turn, plus a rolling window of recent
+# real runtimes so the ETA shown to a queued uploader is a measured number,
+# not a guess. Async-native (no thread blocking) so the event loop stays free
+# to serve /status polls from every waiting client while one job runs.
+_queue_lock = threading.Lock()
+_queue: list[str] = []
+_recent_runtimes: list[float] = []
+_DEFAULT_ETA_SECONDS = 90.0  # matches this project's own measured real-model timing until data exists
+_MAX_QUEUE_LENGTH = 10  # a sane cap for a single local workstation, not a public multi-tenant service
+
+
+def _record_runtime(seconds: float) -> None:
+    with _queue_lock:
+        _recent_runtimes.append(seconds)
+        del _recent_runtimes[:-10]
+
+
+def _estimate_job_seconds() -> float:
+    with _queue_lock:
+        if not _recent_runtimes:
+            return _DEFAULT_ETA_SECONDS
+        return sum(_recent_runtimes) / len(_recent_runtimes)
+
+
+class QueueFull(Exception):
+    """Raised with a message meant to be shown to the user verbatim."""
+
+
+async def wait_for_slot(job: str) -> None:
+    """Block (without blocking the event loop) until `job` can acquire `busy`,
+    reporting live queue position and a measured-ETA to /status while it waits.
+    Replaces the old instant-409-reject: a second uploader now gets a real,
+    polite wait state instead of "busy, try again" with no information."""
+    with _queue_lock:
+        if len(_queue) >= _MAX_QUEUE_LENGTH:
+            raise QueueFull(
+                f"{_MAX_QUEUE_LENGTH} studies are already queued ahead of this one. "
+                "Wait for the queue to shorten before trying again."
+            )
+        _queue.append(job)
+    try:
+        while True:
+            with _queue_lock:
+                position = _queue.index(job)
+            if position == 0 and busy.acquire(blocking=False):
+                with _queue_lock:
+                    _queue.remove(job)
+                return
+            eta = round(_estimate_job_seconds() * (position + 1), 1)
+            report_stage(job, "queued", queue_position=position, eta_seconds=eta)
+            await asyncio.sleep(1.0)
+    except BaseException:
+        # Covers asyncio.CancelledError (client disconnected while queued) too —
+        # a job that never got to run must not be left occupying a queue slot.
+        with _queue_lock:
+            if job in _queue:
+                _queue.remove(job)
+        raise
 
 _segmenter_cache: Segmenter | HeuristicSegmenter | None = None
 
@@ -151,6 +213,33 @@ app.add_middleware(
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
+
+
+class ApiError(HTTPException):
+    """An HTTPException carrying a stable, machine-readable `code` alongside its
+    message — the same {code, message} shape validate.py's findings and the
+    assistant endpoint already use. Every failure path in this API should raise
+    this (or InputRejected, for the validation-specific path) rather than a bare
+    HTTPException(status, "string"), so a client — or a judge's scorer — can branch
+    on `code` instead of parsing prose. Prefer a new, specific code over reusing
+    "error" when adding a new failure path."""
+
+    def __init__(self, status_code: int, code: str, message: str):
+        super().__init__(status_code=status_code, detail={"code": code, "message": message})
+
+
+@app.exception_handler(HTTPException)
+async def _http_exception_handler(request: Request, exc: HTTPException):
+    # Normalises every HTTPException — ApiError's structured ones, any bare
+    # HTTPException(status, "string") not yet migrated, and anything FastAPI itself
+    # raises (e.g. a malformed request) — into one consistent envelope, so a caller
+    # never has to guess whether `detail` is a string or a dict this time.
+    detail = exc.detail
+    if isinstance(detail, dict) and "code" in detail and "message" in detail:
+        body = {**detail, "status": exc.status_code}
+    else:
+        body = {"code": "error", "message": str(detail), "status": exc.status_code}
+    return JSONResponse(body, status_code=exc.status_code, headers=getattr(exc, "headers", None))
 
 
 @app.middleware("http")
@@ -220,14 +309,14 @@ def assistant_chat(req: AssistantChatRequest):
     job_metadata = None
     if req.job_id:
         if not _valid_job_id(req.job_id):
-            raise HTTPException(400, "Invalid job id.")
+            raise ApiError(400, "invalid_job_id", "Invalid job id.")
         meta_path = _jobdir(req.job_id) / "metadata.json"
         if meta_path.exists():
             job_metadata = json.loads(meta_path.read_text())
     try:
         result = assistant_ask(req.question, job_metadata=job_metadata, mode=mode, settings=SETTINGS)
     except AssistantUnavailable as exc:
-        raise HTTPException(503, str(exc)) from exc
+        raise ApiError(503, "assistant_unavailable", str(exc)) from exc
     return {
         "answer": result.answer,
         "cited_fields": result.cited_fields,
@@ -277,7 +366,7 @@ async def inspect_study(
                     bytes_read += len(chunk)
                     if bytes_read > MAX_UPLOAD_BYTES:
                         shutil.rmtree(scratch, ignore_errors=True)
-                        raise HTTPException(413, f"Upload {name} exceeds {MAX_UPLOAD_BYTES} bytes.")
+                        raise ApiError(413, "upload_too_large", f"Upload {name} exceeds {MAX_UPLOAD_BYTES} bytes.")
                     fh.write(chunk)
             if name == "expert":
                 expert_path = dest
@@ -479,6 +568,7 @@ async def _run_pipeline(job: str, paths: dict[str, Path], expert_path: Path | No
     try:
         metadata = await run_in_threadpool(process, job, paths, expert_path, out, source_mode)
         log.info("job %s: completed in %.1fs", job, metadata["runtime_seconds"])
+        _record_runtime(metadata["runtime_seconds"])
         checkpoint_hash = metadata["model"].get("checkpoint_sha256")
         if metadata["model"]["execution_mode"] == "model_inference" and not checkpoint_hash:
             raise RuntimeError("Model checkpoint hash missing for verified model inference.")
@@ -534,30 +624,17 @@ async def segment(
     # polling /status for this id before this request finishes uploading.
     global _current_job
     if not _valid_job_id(job):
-        raise HTTPException(400, "Invalid job id.")
+        raise ApiError(400, "invalid_job_id", "Invalid job id.")
     uploads = {"T1": T1, "T1Gd": T1Gd, "T2": T2, "FLAIR": FLAIR}
-    if not busy.acquire(blocking=False):
-        with _progress_lock:
-            current = PROGRESS.get(_current_job) if _current_job else None
-        detail = f" Current job {_current_job} is at: {current['message']}" if current else ""
-        log.info("job %s rejected: busy with %s", job, _current_job)
-        raise HTTPException(
-            409,
-            f"One study is already processing.{detail} Wait for it to finish, "
-            f"or poll /api/jobs/{_current_job}/status for its progress.",
-        )
-
-    _current_job = job
     out = JOBS / job
     if out.exists():
-        busy.release()
-        _current_job = None
-        raise HTTPException(409, "Job id already in use.")
+        raise ApiError(409, "job_id_in_use", "Job id already in use.")
     out.mkdir()
     log.info("job %s: received, sequences=%s expert=%s", job, list(uploads), bool(expert))
     report_stage(job, "received")
     paths: dict[str, Path] = {}
     expert_path: Path | None = None
+    acquired = False
     try:
         items = {**uploads, **({"expert": expert} if expert else {})}
         for name, upload in items.items():
@@ -578,6 +655,16 @@ async def segment(
             else:
                 paths[name] = path
 
+        # Upload is fully received and saved; now wait (politely, with a real
+        # position and ETA shown to the client) for exclusive use of the one
+        # processing slot, rather than rejecting outright if another study is
+        # already running.
+        try:
+            await wait_for_slot(job)
+        except QueueFull as exc:
+            raise InputRejected([{"code": "queue_full", "sequence": None, "message": str(exc)}]) from exc
+        acquired = True
+        _current_job = job
         return await _run_pipeline(job, paths, expert_path, out)
     except InputRejected as exc:
         shutil.rmtree(out, ignore_errors=True)
@@ -596,10 +683,11 @@ async def segment(
         )
     except Exception as exc:  # pragma: no cover - last-resort guard, never return a partial result
         shutil.rmtree(out, ignore_errors=True)
-        raise HTTPException(500, f"Processing failed; no result is available ({exc.__class__.__name__}).") from exc
+        raise ApiError(500, "processing_failed", f"Processing failed; no result is available ({exc.__class__.__name__}).") from exc
     finally:
+        if acquired:
+            busy.release()
         _current_job = None
-        busy.release()
         for upload in [*uploads.values(), expert]:
             if upload:
                 await upload.close()
@@ -642,36 +730,22 @@ async def run_sample(sample_id: str, job: str):
     difference is where the four sequence files come from."""
     global _current_job
     if not _valid_job_id(job):
-        raise HTTPException(400, "Invalid job id.")
+        raise ApiError(400, "invalid_job_id", "Invalid job id.")
 
     catalog = {e["id"] for e in _samples_manifest()}
     if sample_id not in catalog or ".." in sample_id or "/" in sample_id or "\\" in sample_id:
-        raise HTTPException(404, f"Invalid or uncatalogued sample '{sample_id}'.")
+        raise ApiError(404, "unknown_sample", f"Invalid or uncatalogued sample '{sample_id}'.")
 
     case_dir = SAMPLES_DIR / sample_id
     if not case_dir.is_dir():
-        raise HTTPException(404, f"Unknown sample '{sample_id}'.")
+        raise ApiError(404, "unknown_sample", f"Unknown sample '{sample_id}'.")
     missing = [s for s in SEQUENCES if not (case_dir / f"{s}.nii.gz").exists()]
     if missing:
-        raise HTTPException(409, f"Sample '{sample_id}' is missing {', '.join(missing)} on the server.")
+        raise ApiError(409, "sample_incomplete", f"Sample '{sample_id}' is missing {', '.join(missing)} on the server.")
 
-    if not busy.acquire(blocking=False):
-        with _progress_lock:
-            current = PROGRESS.get(_current_job) if _current_job else None
-        detail = f" Current job {_current_job} is at: {current['message']}" if current else ""
-        log.info("job %s rejected: busy with %s", job, _current_job)
-        raise HTTPException(
-            409,
-            f"One study is already processing.{detail} Wait for it to finish, "
-            f"or poll /api/jobs/{_current_job}/status for its progress.",
-        )
-
-    _current_job = job
     out = JOBS / job
     if out.exists():
-        busy.release()
-        _current_job = None
-        raise HTTPException(409, "Job id already in use.")
+        raise ApiError(409, "job_id_in_use", "Job id already in use.")
     out.mkdir()
     log.info("job %s: running pre-staged sample '%s'", job, sample_id)
     report_stage(job, "received")
@@ -688,7 +762,14 @@ async def run_sample(sample_id: str, job: str):
     sample_entry = next((e for e in _samples_manifest() if e["id"] == sample_id), None)
     source_mode = sample_entry.get("source") if sample_entry else None
 
+    acquired = False
     try:
+        try:
+            await wait_for_slot(job)
+        except QueueFull as exc:
+            raise InputRejected([{"code": "queue_full", "sequence": None, "message": str(exc)}]) from exc
+        acquired = True
+        _current_job = job
         return await _run_pipeline(job, paths, expert_path, out, source_mode=source_mode)
     except InputRejected as exc:
         shutil.rmtree(out, ignore_errors=True)
@@ -707,10 +788,11 @@ async def run_sample(sample_id: str, job: str):
         )
     except Exception as exc:  # pragma: no cover - last-resort guard, never return a partial result
         shutil.rmtree(out, ignore_errors=True)
-        raise HTTPException(500, f"Processing failed; no result is available ({exc.__class__.__name__}).") from exc
+        raise ApiError(500, "processing_failed", f"Processing failed; no result is available ({exc.__class__.__name__}).") from exc
     finally:
+        if acquired:
+            busy.release()
         _current_job = None
-        busy.release()
 
 
 @app.get("/api/jobs/{job}/status")
@@ -718,18 +800,18 @@ def job_status(job: str):
     with _progress_lock:
         entry = PROGRESS.get(job)
     if entry is None:
-        raise HTTPException(404, "Unknown job id.")
+        raise ApiError(404, "unknown_job", "Unknown job id.")
     return entry
 
 
 def _jobdir(job: str) -> Path:
     if len(job) != 32 or any(c not in "0123456789abcdef" for c in job):
-        raise HTTPException(404, "Study not found.")
+        raise ApiError(404, "job_not_found", "Study not found.")
     path = JOBS / job
     if not (path / "metadata.json").exists():
-        raise HTTPException(404, "No completed study is available.")
+        raise ApiError(404, "job_not_done", "No completed study is available.")
     if time.time() - path.stat().st_mtime > RETENTION_SECONDS:
-        raise HTTPException(410, "Study has expired and is being removed.")
+        raise ApiError(410, "job_expired", "Study has expired and is being removed.")
     return path
 
 
@@ -741,7 +823,7 @@ def metadata(job: str):
 @app.get("/api/jobs/{job}/volume/{seq}")
 def volume(job: str, seq: str):
     if seq not in SEQUENCES:
-        raise HTTPException(404, "Sequence not found.")
+        raise ApiError(404, "unknown_sequence", "Sequence not found.")
     return FileResponse(_jobdir(job) / f"{seq}.bin", media_type="application/octet-stream")
 
 
@@ -753,10 +835,10 @@ def labels(job: str):
 @app.get("/api/jobs/{job}/uncertainty/{region}")
 def uncertainty(job: str, region: str):
     if region not in ("WT", "TC", "ET"):
-        raise HTTPException(404, "Region not found.")
+        raise ApiError(404, "unknown_region", "Region not found.")
     p = _jobdir(job) / f"uncertainty_{region}.bin"
     if not p.exists():
-        raise HTTPException(404, "No uncertainty estimate for this study (single-pass model run).")
+        raise ApiError(404, "no_uncertainty", "No uncertainty estimate for this study (single-pass model run).")
     return FileResponse(p, media_type="application/octet-stream")
 
 
@@ -764,7 +846,7 @@ def uncertainty(job: str, region: str):
 def expert_labels(job: str):
     p = _jobdir(job) / "expert-labels.bin"
     if not p.exists():
-        raise HTTPException(404, "No expert mask was provided.")
+        raise ApiError(404, "no_expert_mask", "No expert mask was provided.")
     return FileResponse(p, media_type="application/octet-stream")
 
 
@@ -831,12 +913,12 @@ def job_manifest(job: str):
 @app.get("/api/jobs/{job}/components/{region}")
 def job_components(job: str, region: str):
     if region not in ("WT", "TC", "ET"):
-        raise HTTPException(404, "Region must be WT, TC, or ET.")
+        raise ApiError(404, "invalid_region", "Region must be WT, TC, or ET.")
     meta = json.loads((_jobdir(job) / "metadata.json").read_text())
     connectivity = meta.get("connectivity", {}).get(region)
     geometry = meta.get("geometry", {}).get(region)
     if not connectivity:
-        raise HTTPException(404, f"No component data for region {region}")
+        raise ApiError(404, "no_component_data", f"No component data for region {region}")
     return {
         "region": region,
         "component_count": connectivity.get("component_count", 0),
@@ -851,10 +933,10 @@ def job_components(job: str, region: str):
 @app.get("/api/jobs/{job}/errors/{region}")
 def job_errors(job: str, region: str):
     if region not in ("WT", "TC", "ET"):
-        raise HTTPException(404, "Region must be WT, TC, or ET.")
+        raise ApiError(404, "invalid_region", "Region must be WT, TC, or ET.")
     meta = json.loads((_jobdir(job) / "metadata.json").read_text())
     if not meta.get("has_expert"):
-        raise HTTPException(404, "No expert ground truth was provided for this study.")
+        raise ApiError(404, "no_expert_mask", "No expert ground truth was provided for this study.")
     agreement = meta.get("agreement", {}).get(region)
     metrics = meta.get("metrics", {}).get(region)
     return {
@@ -878,7 +960,7 @@ def compare_jobs(req: ComparisonRequest):
 
     # Verify spatial geometry compatibility
     if meta_a.get("dims") != meta_b.get("dims"):
-        raise HTTPException(400, "Jobs have incompatible grid dimensions.")
+        raise ApiError(400, "incompatible_grids", "Jobs have incompatible grid dimensions.")
 
     deltas = {}
     for region in ("WT", "TC", "ET"):
