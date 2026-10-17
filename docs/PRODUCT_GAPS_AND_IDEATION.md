@@ -269,15 +269,15 @@ not one. Nothing today lets them come back to case 3 after looking at case
 
 ### D. The gap that actually blocks real-world daily use
 
-- **DICOM ingestion is the highest-leverage item on this entire list.** Every
-  idea above assumes a resident already has four NIfTI files. In practice
-  their actual daily artefact is a DICOM series out of the hospital's PACS.
-  Until there's a conversion step in front of upload (`dicom2nifti` or
-  equivalent, already named in the original roadmap's "growing edge"), the
-  tool cannot ingest what a resident's worklist actually contains — this
-  matters more than most Layer-3 additions above, because without it the
-  *daily* use case this whole project is framed around never actually
-  happens outside a demo.
+- ~~DICOM ingestion is the highest-leverage item on this entire list.~~ —
+  **done.** Every idea above used to assume a resident already has four
+  NIfTI files; in practice their actual daily artefact is a DICOM series out
+  of the hospital's PACS. `backend/neuroscope/dicom_io.py` now reads a real
+  DICOM series (or a zip of one) directly — grouped by `SeriesInstanceUID`,
+  sorted along the slice normal, a verified LPS→RAS affine, sequence
+  auto-detection from `SeriesDescription`/contrast tags, and a
+  de-identification check that warns rather than assumes. See
+  [`docs/ARCHITECTURE.md`](ARCHITECTURE.md)'s "DICOM ingestion" section.
 - **Atlas-relative localisation**, re-prioritized up from the original list:
   it directly extends the PS's own opening question ("which side is it on")
   to "which lobe," using a small bundled coarse atlas and an affine-only

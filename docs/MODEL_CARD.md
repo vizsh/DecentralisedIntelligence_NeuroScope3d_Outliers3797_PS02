@@ -47,6 +47,8 @@ A flip-based test-time-augmentation ensemble, not a single forward pass: the vol
 
 This is a measured disagreement signal, not a calibrated probability of correctness. Published findings show naive uncertainty signals in medical segmentation can correlate only weakly with true boundary error — this caveat is surfaced in the product UI itself, not only here.
 
+**Measured, not just caveated**: pooled across all 10 held-out cases (1,297,798 WT-union voxels), σ shows a real, positive, **moderate** correlation with disagreement against the expert mask (Pearson 0.3463) — disagreement rate rises from 15.7% in the lowest σ bin to 54.5–65.2% in the higher bins. Real evidence that the signal is informative, not proof of a formally calibrated confidence property. Reproduce: `backend/calibration_check.py`; full per-bin and per-case breakdown in `backend/data/calibration_check.json`.
+
 ## Known limitations
 
 - Trained on BraTS 2018; the held-out evaluation above uses Medical Segmentation Decathlon cases, and whether any of those 10 case IDs overlap the checkpoint's original BraTS 2018 training set is not independently verifiable from its public release — disclosed per-run in `backend/data/manifest.json` and `real_sample_eval.json`'s `training_data_overlap` field, not assumed clean.
