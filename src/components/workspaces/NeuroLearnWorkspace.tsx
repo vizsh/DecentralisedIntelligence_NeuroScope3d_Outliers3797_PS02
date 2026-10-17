@@ -25,11 +25,50 @@ export default function NeuroLearnWorkspace() {
   // Interactive Lab 4: Failure Modes State
   const [selectedFailureCase, setSelectedFailureCase] = useState<string>('infiltrative')
 
+  // Interactive Lab 5: Voxel Quest Challenge State
+  const [questStep, setQuestStep] = useState(0)
+  const [questScore, setQuestScore] = useState(0)
+  const [questAnswer, setQuestAnswer] = useState<number | null>(null)
+  const [questSubmitted, setQuestSubmitted] = useState(false)
+
+  const QUEST_QUESTIONS = [
+    {
+      question: 'A scan has 45,000 WT voxels with spacing [0.5 mm, 0.5 mm, 2.0 mm]. What is the true physical volume in mL?',
+      options: ['45.00 mL (1mm isotropic assumption)', '22.50 mL (45,000 × 0.5 × 0.5 × 2.0 / 1000)', '90.00 mL', '11.25 mL'],
+      correct: 1,
+      explanation: 'Voxel volume = 0.5 × 0.5 × 2.0 = 0.5 mm³. 45,000 voxels × 0.5 mm³ = 22,500 mm³ = 22.50 mL.',
+    },
+    {
+      question: 'Which Boolean expression satisfies the official BraTS hierarchical nesting contract for Whole Tumor (WT)?',
+      options: ['WT = ED only', 'WT = NCR ∪ ED ∪ ET (Necrotic Core + Edema + Enhancing Tumor)', 'WT = TC ∩ ET', 'WT = ET only'],
+      correct: 1,
+      explanation: 'BraTS defines WT as the union of all pathological tumor sub-compartments: necrotic core (1), peritumoral edema (2), and enhancing rim (4).',
+    },
+    {
+      question: 'If flip-TTA ensemble standard deviation σ > 0.40 at a lesion border, what does this mathematically prove?',
+      options: [
+        'It proves with 95% certainty that the prediction is wrong',
+        'It measures model prediction variance under spatial transformation, indicating boundary ambiguity without being a ground truth proof',
+        'It proves that the patient moved during scanning',
+        'It proves the model weights are corrupted',
+      ],
+      correct: 1,
+      explanation: 'TTA disagreement is an uncalibrated empirical stability metric, not a posterior error probability. Low uncertainty does not guarantee correctness, and high uncertainty is an investigation trigger.',
+    },
+    {
+      question: 'In standard radiological RAS+ coordinate space, which orthogonal view has Left-Right on X and Anterior-Posterior on Y?',
+      options: ['Sagittal plane (slices along X)', 'Coronal plane (slices along Y)', 'Axial plane (slices along Z: from Inferior to Superior)', 'Oblique reformatted plane'],
+      correct: 2,
+      explanation: 'The Axial plane traverses the neuroanatomy horizontally with X representing Left-Right, Y representing Anterior-Posterior, and Z indexing slices along the Inferior-Superior axis.',
+    },
+  ]
+
   const labs = [
     { id: 'sequences', title: '1. MRI Modalities & Contrast', desc: 'T1, T1Gd, T2, FLAIR physical mechanisms' },
     { id: 'labels', title: '2. BraTS Label Dissection', desc: 'NCR, ED, ET Boolean composition into WT & TC' },
     { id: 'geometry', title: '3. Geometry & Anisotropy', desc: 'Voxel spacing, slice thickness, partial volume effects' },
-    { id: 'failures', title: '4. Failure Modes & Edge Cases', desc: 'Boundary ambiguity and uncertainty detection' }
+    { id: 'failures', title: '4. Failure Modes & Edge Cases', desc: 'Boundary ambiguity and uncertainty detection' },
+    { id: 'quest', title: '5. Voxel Quest Challenge', desc: 'Spatial reasoning, coordinate mapping, and volumetrics game' },
   ] as const
 
   const handleGeometryChange = (val: number) => {
@@ -414,6 +453,153 @@ export default function NeuroLearnWorkspace() {
               )}
             </div>
           </div>
+        </div>
+      )}
+
+      {/* LAB 5: VOXEL QUEST SPATIAL CHALLENGE */}
+      {activeLearnLab === 'quest' && (
+        <div className="rounded-lg border border-edge bg-panel/70 p-5 space-y-4">
+          <div className="flex items-center justify-between border-b border-edge/60 pb-3">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="rounded bg-amber-500/10 px-2 py-0.5 font-mono text-[10px] font-bold text-amber-300 border border-amber-500/20">
+                  Interactive Quest
+                </span>
+                <h2 className="text-[14px] font-semibold text-slate-100">
+                  Spatial Coordinate & QC Proficiency Challenge
+                </h2>
+              </div>
+              <p className="mt-1 font-mono text-[10px] text-slate-400">
+                Test and certify your intuition of 3D NIfTI affines, physical millimeters, and BraTS Boolean logic.
+              </p>
+            </div>
+            <div className="text-right font-mono">
+              <span className="text-[10px] text-slate-500">Score: </span>
+              <span className="text-[13px] font-bold text-amber-300">
+                {questScore} / {QUEST_QUESTIONS.length}
+              </span>
+            </div>
+          </div>
+
+          {questStep < QUEST_QUESTIONS.length ? (
+            <div className="space-y-4">
+              <div className="rounded-md border border-edge bg-panel-2/60 p-4">
+                <span className="font-mono text-[10px] font-semibold text-sky-400">
+                  QUESTION {questStep + 1} OF {QUEST_QUESTIONS.length}
+                </span>
+                <p className="mt-2 text-[12.5px] font-medium text-slate-200 leading-snug">
+                  {QUEST_QUESTIONS[questStep].question}
+                </p>
+
+                <div className="mt-4 space-y-2">
+                  {QUEST_QUESTIONS[questStep].options.map((opt, i) => {
+                    const isSelected = questAnswer === i
+                    let itemStyle = 'border-edge bg-panel hover:border-slate-500 text-slate-300'
+                    if (questSubmitted) {
+                      if (i === QUEST_QUESTIONS[questStep].correct) {
+                        itemStyle = 'border-emerald-500 bg-emerald-500/15 text-emerald-200 font-semibold'
+                      } else if (isSelected) {
+                        itemStyle = 'border-rose-500 bg-rose-500/15 text-rose-200'
+                      } else {
+                        itemStyle = 'border-edge/40 bg-panel/40 text-slate-500 opacity-60'
+                      }
+                    } else if (isSelected) {
+                      itemStyle = 'border-sky-500 bg-sky-500/20 text-sky-100 font-medium'
+                    }
+
+                    return (
+                      <button
+                        key={i}
+                        disabled={questSubmitted}
+                        onClick={() => setQuestAnswer(i)}
+                        className={`flex w-full items-center justify-between rounded-md border p-3 text-left font-mono text-[11px] transition ${itemStyle}`}
+                      >
+                        <span>{opt}</span>
+                        {questSubmitted && i === QUEST_QUESTIONS[questStep].correct && (
+                          <span className="text-emerald-400">✓ Correct</span>
+                        )}
+                        {questSubmitted && isSelected && i !== QUEST_QUESTIONS[questStep].correct && (
+                          <span className="text-rose-400">✗ Incorrect</span>
+                        )}
+                      </button>
+                    )
+                  })}
+                </div>
+
+                {questSubmitted && (
+                  <div className="mt-4 rounded-md border border-edge bg-slate-900/60 p-3 font-mono text-[10.5px] text-slate-300">
+                    <strong className="text-sky-300">Explanation: </strong>
+                    {QUEST_QUESTIONS[questStep].explanation}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-center justify-between">
+                <span className="font-mono text-[10px] text-slate-500">
+                  Physical and mathematical ground truth checked locally.
+                </span>
+
+                {!questSubmitted ? (
+                  <button
+                    disabled={questAnswer === null}
+                    onClick={() => {
+                      if (questAnswer === null) return
+                      const isCorrect = questAnswer === QUEST_QUESTIONS[questStep].correct
+                      if (isCorrect) setQuestScore((s) => s + 1)
+                      setQuestSubmitted(true)
+                    }}
+                    className="rounded-md border border-sky-500/50 bg-sky-500/20 px-4 py-1.5 font-mono text-[11px] font-medium text-sky-200 hover:bg-sky-500/30 disabled:opacity-40"
+                  >
+                    Confirm Answer
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => {
+                      const next = questStep + 1
+                      if (next >= QUEST_QUESTIONS.length) {
+                        setLabCompleted('quest')
+                      }
+                      setQuestStep(next)
+                      setQuestAnswer(null)
+                      setQuestSubmitted(false)
+                    }}
+                    className="rounded-md border border-emerald-500/50 bg-emerald-500/20 px-4 py-1.5 font-mono text-[11px] font-medium text-emerald-200 hover:bg-emerald-500/30"
+                  >
+                    {questStep + 1 < QUEST_QUESTIONS.length ? 'Next Question →' : 'Complete Quest →'}
+                  </button>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center p-8 text-center space-y-3 rounded-lg border border-emerald-500/30 bg-emerald-950/20">
+              <span className="text-2xl">🏆</span>
+              <h3 className="text-[15px] font-semibold text-emerald-200">
+                Voxel Quest Completed!
+              </h3>
+              <p className="max-w-md font-mono text-[11px] text-slate-300">
+                You scored {questScore} out of {QUEST_QUESTIONS.length}. You have certified proficiency in NIfTI physical coordinates, affine geometry, and BraTS regional logic.
+              </p>
+              <div className="pt-2 flex gap-3">
+                <button
+                  onClick={() => {
+                    setQuestStep(0)
+                    setQuestScore(0)
+                    setQuestAnswer(null)
+                    setQuestSubmitted(false)
+                  }}
+                  className="rounded border border-edge bg-panel px-3 py-1 font-mono text-[10.5px] text-slate-300 hover:bg-panel-2"
+                >
+                  Restart Quest
+                </button>
+                <button
+                  onClick={() => setActiveWorkspace('viewer')}
+                  className="rounded border border-emerald-500/40 bg-emerald-500/20 px-3.5 py-1 font-mono text-[10.5px] font-medium text-emerald-300 hover:bg-emerald-500/30"
+                >
+                  Jump into 3D Twin Viewer →
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

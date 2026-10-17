@@ -258,4 +258,70 @@ export const fetchExpertLabels = (jobId: string) => fetchBytes(`/api/jobs/${jobI
 
 export const reportUrl = (jobId: string) => `${BASE}/api/jobs/${jobId}/report`
 
+export interface ModelStatus {
+  status: 'ready' | 'fallback'
+  name: string
+  version: string
+  licence: string
+  source: string
+  execution_mode: 'model_inference' | 'heuristic_fallback' | 'synthetic_demo'
+  checkpoint_sha256: string | null
+  tta_passes: number
+  hardware_target: string
+}
+
+export async function getModelStatus(): Promise<ModelStatus | null> {
+  try {
+    const res = await fetch(`${BASE}/api/models/status`)
+    if (!res.ok) return null
+    return await res.json()
+  } catch {
+    return null
+  }
+}
+
+export async function getJobManifest(jobId: string): Promise<any | null> {
+  try {
+    const res = await fetch(`${BASE}/api/jobs/${jobId}/manifest`)
+    if (!res.ok) return null
+    return await res.json()
+  } catch {
+    return null
+  }
+}
+
+export async function getJobComponents(jobId: string, region: 'WT' | 'TC' | 'ET'): Promise<any | null> {
+  try {
+    const res = await fetch(`${BASE}/api/jobs/${jobId}/components/${region}`)
+    if (!res.ok) return null
+    return await res.json()
+  } catch {
+    return null
+  }
+}
+
+export async function getJobErrors(jobId: string, region: 'WT' | 'TC' | 'ET'): Promise<any | null> {
+  try {
+    const res = await fetch(`${BASE}/api/jobs/${jobId}/errors/${region}`)
+    if (!res.ok) return null
+    return await res.json()
+  } catch {
+    return null
+  }
+}
+
+export async function compareJobs(jobA: string, jobB: string): Promise<any | null> {
+  try {
+    const res = await fetch(`${BASE}/api/comparisons`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ job_a: jobA, job_b: jobB }),
+    })
+    if (!res.ok) return null
+    return await res.json()
+  } catch {
+    return null
+  }
+}
+
 export const predictionUrl = (jobId: string) => `${BASE}/api/jobs/${jobId}/prediction`

@@ -81,3 +81,25 @@ def test_inspect_endpoint_shape_mismatch(tmp_path: Path):
     assert data["ok"] is False
     assert data["geometry"]["compatible"] is False
     assert any(e["code"] == "shape_mismatch" for e in data["errors"])
+
+
+def test_models_status_endpoint():
+    res = client.get("/api/models/status")
+    assert res.status_code == 200
+    data = res.json()
+    assert "status" in data
+    assert "name" in data
+    assert "execution_mode" in data
+    assert data["execution_mode"] in ("model_inference", "heuristic_fallback")
+    assert "hardware_target" in data
+
+
+def test_run_sample_path_traversal_blocked():
+    malicious_id = "../etc/passwd"
+    res = client.post(f"/api/samples/{malicious_id}/run/0123456789abcdef0123456789abcdef")
+    assert res.status_code == 404
+
+    nonexistent_id = "unknown_phantom_xyz"
+    res2 = client.post(f"/api/samples/{nonexistent_id}/run/0123456789abcdef0123456789abcdef")
+    assert res2.status_code == 404
+

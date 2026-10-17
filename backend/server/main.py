@@ -26,6 +26,7 @@ import numpy as np
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
+from pydantic import BaseModel
 from starlette.concurrency import run_in_threadpool
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -165,13 +166,35 @@ async def no_store(request: Request, call_next):
 
 @app.get("/api/health")
 def health():
-    segmenter = get_segmenter()
+    # Lightweight liveness check: does not trigger expensive bundle initialization
+    global _segmenter_cache
+    is_loaded = _segmenter_cache is not None
+    model_ready = isinstance(_segmenter_cache, Segmenter) if is_loaded else False
+    model_name = _segmenter_cache.info.name if is_loaded else "MONAI SegResNet (lazy load)"
     return {
         "status": "ok",
-        "model_ready": isinstance(segmenter, Segmenter),
-        "model_name": segmenter.info.name,
+        "model_ready": model_ready,
+        "model_name": model_name,
         "disclaimer": DISCLAIMER,
         "version": __version__,
+    }
+
+
+@app.get("/api/models/status")
+def model_status():
+    segmenter = get_segmenter()
+    info = segmenter.info
+    is_real = isinstance(segmenter, Segmenter)
+    return {
+        "status": "ready" if is_real else "fallback",
+        "name": info.name,
+        "version": info.version,
+        "licence": info.licence,
+        "source": info.source,
+        "execution_mode": getattr(info, "execution_mode", "model_inference" if is_real else "heuristic_fallback"),
+        "checkpoint_sha256": getattr(info, "checkpoint_sha256", None),
+        "tta_passes": getattr(segmenter, "tta_passes", 1),
+        "hardware_target": "CPU (sliding-window) / T4 CUDA",
     }
 
 
@@ -209,8 +232,13 @@ async def inspect_study(
                     status_code=422,
                 )
             dest = scratch / f"{name}{suffix}"
+            bytes_read = 0
             with dest.open("wb") as fh:
                 while chunk := await upload.read(1024 * 1024):
+                    bytes_read += len(chunk)
+                    if bytes_read > MAX_UPLOAD_BYTES:
+                        shutil.rmtree(scratch, ignore_errors=True)
+                        raise HTTPException(413, f"Upload {name} exceeds {MAX_UPLOAD_BYTES} bytes.")
                     fh.write(chunk)
             if name == "expert":
                 expert_path = dest
@@ -364,6 +392,7 @@ def process(job: str, paths: dict[str, Path], expert_path: Path | None, out: Pat
             "source": info.source, "deterministic": info.deterministic,
             "tta_passes": prediction.tta_passes,
             "execution_mode": execution_mode,
+            "checkpoint_sha256": getattr(info, "checkpoint_sha256", None) if execution_mode == "model_inference" else None,
         },
         "warnings": _findings(validation.warnings) + ([{"code": "bad_expert_mask", "message": expert_warning, "sequence": "expert"}] if expert_warning else []),
         "input_sha256": {k: sha256(Path(p)) for k, p in paths.items()},
@@ -411,6 +440,9 @@ async def _run_pipeline(job: str, paths: dict[str, Path], expert_path: Path | No
     try:
         metadata = await run_in_threadpool(process, job, paths, expert_path, out, source_mode)
         log.info("job %s: completed in %.1fs", job, metadata["runtime_seconds"])
+        checkpoint_hash = metadata["model"].get("checkpoint_sha256")
+        if metadata["model"]["execution_mode"] == "model_inference" and not checkpoint_hash:
+            raise RuntimeError("Model checkpoint hash missing for verified model inference.")
         return {
             "job_id": job,
             "study_id": job,
@@ -424,7 +456,7 @@ async def _run_pipeline(job: str, paths: dict[str, Path], expert_path: Path | No
             "model": {
                 "name": metadata["model"]["name"],
                 "execution_mode": metadata["model"]["execution_mode"],
-                "checkpoint_hash": metadata.get("model_sha256", "sha256:7a8b9f01c8934bcde10238fa09e451b6801934ef289a01c38e91024bcde59102"),
+                "checkpoint_hash": checkpoint_hash,
             },
             "results": {
                 "mask_available": True,
@@ -572,6 +604,10 @@ async def run_sample(sample_id: str, job: str):
     global _current_job
     if not _valid_job_id(job):
         raise HTTPException(400, "Invalid job id.")
+
+    catalog = {e["id"] for e in _samples_manifest()}
+    if sample_id not in catalog or ".." in sample_id or "/" in sample_id or "\\" in sample_id:
+        raise HTTPException(404, f"Invalid or uncatalogued sample '{sample_id}'.")
 
     case_dir = SAMPLES_DIR / sample_id
     if not case_dir.is_dir():
@@ -726,3 +762,112 @@ def _report_html(m: dict) -> str:
         f"<h2>Provenance, warnings and limitations</h2><pre>{html.escape(json.dumps(m, indent=2))}</pre>"
         '<button onclick="print()">Print / Save as PDF</button></body></html>'
     )
+
+
+@app.get("/api/jobs/{job}/manifest")
+def job_manifest(job: str):
+    path = _jobdir(job)
+    meta = json.loads((path / "metadata.json").read_text())
+    artifacts = {
+        "prediction_nifti": (path / "prediction.nii.gz").exists(),
+        "report_html": (path / "report.html").exists(),
+        "labels_bin": (path / "labels.bin").exists(),
+        "expert_labels_bin": (path / "expert-labels.bin").exists(),
+        "uncertainty_wt": (path / "uncertainty_WT.bin").exists(),
+    }
+    return {
+        "job_id": job,
+        "study_id": job,
+        "execution_mode": meta.get("execution_mode"),
+        "model": meta.get("model"),
+        "input_sha256": meta.get("input_sha256"),
+        "expert_sha256": meta.get("expert_sha256"),
+        "code_commit": meta.get("code_commit"),
+        "timestamp": meta.get("timestamp"),
+        "runtime_seconds": meta.get("runtime_seconds"),
+        "artifacts": artifacts,
+    }
+
+
+@app.get("/api/jobs/{job}/components/{region}")
+def job_components(job: str, region: str):
+    if region not in ("WT", "TC", "ET"):
+        raise HTTPException(404, "Region must be WT, TC, or ET.")
+    meta = json.loads((_jobdir(job) / "metadata.json").read_text())
+    connectivity = meta.get("connectivity", {}).get(region)
+    geometry = meta.get("geometry", {}).get(region)
+    if not connectivity:
+        raise HTTPException(404, f"No component data for region {region}")
+    return {
+        "region": region,
+        "component_count": connectivity.get("component_count", 0),
+        "component_volumes_ml": connectivity.get("component_volumes_ml", []),
+        "largest_fraction": connectivity.get("largest_fraction", 0),
+        "max_diameter_mm": geometry.get("max_diameter_mm") if geometry else None,
+        "centroid_voxel": geometry.get("centroid_voxel") if geometry else None,
+        "bbox_mm": geometry.get("bbox_mm") if geometry else None,
+    }
+
+
+@app.get("/api/jobs/{job}/errors/{region}")
+def job_errors(job: str, region: str):
+    if region not in ("WT", "TC", "ET"):
+        raise HTTPException(404, "Region must be WT, TC, or ET.")
+    meta = json.loads((_jobdir(job) / "metadata.json").read_text())
+    if not meta.get("has_expert"):
+        raise HTTPException(404, "No expert ground truth was provided for this study.")
+    agreement = meta.get("agreement", {}).get(region)
+    metrics = meta.get("metrics", {}).get(region)
+    return {
+        "region": region,
+        "agreement": agreement,
+        "metrics": metrics,
+    }
+
+
+class ComparisonRequest(BaseModel):
+    job_a: str
+    job_b: str
+
+
+@app.post("/api/comparisons")
+def compare_jobs(req: ComparisonRequest):
+    dir_a = _jobdir(req.job_a)
+    dir_b = _jobdir(req.job_b)
+    meta_a = json.loads((dir_a / "metadata.json").read_text())
+    meta_b = json.loads((dir_b / "metadata.json").read_text())
+
+    # Verify spatial geometry compatibility
+    if meta_a.get("dims") != meta_b.get("dims"):
+        raise HTTPException(400, "Jobs have incompatible grid dimensions.")
+
+    deltas = {}
+    for region in ("WT", "TC", "ET"):
+        vol_a = meta_a.get("regions", {}).get(region, {}).get("volume_ml", 0.0)
+        vol_b = meta_b.get("regions", {}).get(region, {}).get("volume_ml", 0.0)
+        deltas[region] = {
+            "volume_a_ml": vol_a,
+            "volume_b_ml": vol_b,
+            "delta_ml": round(vol_b - vol_a, 3),
+            "pct_change": round(((vol_b - vol_a) / vol_a * 100), 1) if vol_a > 0 else 0.0,
+        }
+
+    return {
+        "job_a": {
+            "id": req.job_a,
+            "execution_mode": meta_a.get("execution_mode"),
+            "model_name": meta_a.get("model", {}).get("name"),
+            "runtime_seconds": meta_a.get("runtime_seconds"),
+        },
+        "job_b": {
+            "id": req.job_b,
+            "execution_mode": meta_b.get("execution_mode"),
+            "model_name": meta_b.get("model", {}).get("name"),
+            "runtime_seconds": meta_b.get("runtime_seconds"),
+        },
+        "deltas": deltas,
+        "shared_geometry": {
+            "dims": meta_a.get("dims"),
+            "spacing": meta_a.get("spacing"),
+        },
+    }

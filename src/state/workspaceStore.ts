@@ -96,8 +96,8 @@ export interface WorkspaceStore {
   setUncertaintyThreshold: (t: number) => void
 
   // NeuroLearn state
-  activeLearnLab: 'sequences' | 'labels' | 'geometry' | 'failures'
-  setActiveLearnLab: (lab: 'sequences' | 'labels' | 'geometry' | 'failures') => void
+  activeLearnLab: 'sequences' | 'labels' | 'geometry' | 'failures' | 'quest'
+  setActiveLearnLab: (lab: 'sequences' | 'labels' | 'geometry' | 'failures' | 'quest') => void
   completedLabs: Record<string, boolean>
   setLabCompleted: (lab: string) => void
 }

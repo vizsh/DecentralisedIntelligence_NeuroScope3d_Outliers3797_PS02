@@ -42,6 +42,8 @@ class ModelInfo:
     licence: str
     source: str
     deterministic: bool
+    execution_mode: str = "model_inference"
+    checkpoint_sha256: str | None = None
 
 
 @dataclass
@@ -165,17 +167,17 @@ def load_segmenter(bundle_dir: str | Path, tta_passes: int = 2) -> Segmenter:
         raise FileNotFoundError(f"Bundle at {root} has no models/model.pt.")
 
     lock_path = weights.parent / "model-lock.json"
+    from .provenance import sha256
+
+    actual_hash = sha256(weights)
     if lock_path.exists():
         import json
 
-        from .provenance import sha256
-
         lock = json.loads(lock_path.read_text())
-        actual = sha256(weights)
-        if actual != lock.get("sha256"):
+        if actual_hash != lock.get("sha256"):
             raise FileNotFoundError(
                 f"Checkpoint at {weights} does not match model-lock.json "
-                f"(expected {lock.get('sha256')}, got {actual}). Inference refused — "
+                f"(expected {lock.get('sha256')}, got {actual_hash}). Inference refused — "
                 "re-run setup_model.py to re-fetch a verified checkpoint."
             )
 
@@ -212,6 +214,8 @@ def load_segmenter(bundle_dir: str | Path, tta_passes: int = 2) -> Segmenter:
         licence="Apache-2.0",
         source="MONAI Model Zoo, trained on BraTS 2018",
         deterministic=True,
+        execution_mode="model_inference",
+        checkpoint_sha256=actual_hash,
     )
     return Segmenter(model, info, tta_passes=tta_passes)
 
@@ -231,6 +235,8 @@ class HeuristicSegmenter:
         licence="n/a",
         source="built in; pipeline smoke test only",
         deterministic=True,
+        execution_mode="heuristic_fallback",
+        checkpoint_sha256=None,
     )
 
     tta_passes = 1
