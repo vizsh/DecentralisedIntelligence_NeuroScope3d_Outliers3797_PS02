@@ -108,6 +108,8 @@ python backend/evaluate.py --root backend/data/decathlon --limit 4 --out backend
 
 Open `http://localhost:5173`, click **Upload case**, drop in four NIfTI sequences (`.nii`/`.nii.gz`), and watch it segment live. No upload yet? The workspace renders a fully interactive synthetic demo case on load, or pick a real case from the **Datasets** panel.
 
+**Or, one command:** `docker compose up --build` runs the frontend, backend, and the local tool-copilot's Ollama service together — see `docker-compose.yml` for the one-time model-pull step the chatbot needs. (Written and reviewed, not build-verified in this project's own dev environment — no Docker installed here; please report back if it needs a fix.)
+
 ## Real data, the clever part
 
 Medical Segmentation Decathlon's Task01_BrainTumour archive is one 7.6 GB tar. `tools/fetch_decathlon_sample.py` doesn't download it — it walks the table of contents using one small HTTP Range request per entry (tar's fixed 512-byte member headers state each member's exact size), then fetches only the selected cases' actual image+label bytes in full. Result: **~38 MB instead of 7.6 GB** for 4 real, full-resolution cases. `tools/convert_decathlon.py` then splits each 4D volume into the four per-modality files this pipeline expects and remaps Decathlon's label codes to BraTS 1/2/4 — the two code systems differ and that mapping is exactly the kind of silent bug this project doesn't let through untested (`backend/tests/`).
