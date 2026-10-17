@@ -8,6 +8,7 @@ export default function BottomActivityStrip() {
   const tool = useStore((s) => s.tool)
   const activeSequence = useStore((s) => s.sequence)
   const setHelpOpen = useStore((s) => s.setHelpOpen)
+  const setAssistantOpen = useStore((s) => s.setAssistantOpen)
 
   const activeWorkspace = useWorkspaceStore((s) => s.activeWorkspace)
   const selectedStudyId = useWorkspaceStore((s) => s.selectedStudyId)
@@ -88,6 +89,14 @@ export default function BottomActivityStrip() {
         <span className="hidden lg:inline text-slate-500">
           Workspace: <strong className="text-slate-300 uppercase">{activeWorkspace}</strong>
         </span>
+
+        <button
+          onClick={() => setAssistantOpen(true)}
+          className="rounded border border-sky-500/30 bg-sky-500/10 px-1.5 py-0.5 text-sky-300 hover:bg-sky-500/20"
+          title="Open the tool copilot (clinician/trainee — explains this tool's own output, never a diagnosis)"
+        >
+          Assistant
+        </button>
 
         <button
           onClick={() => setHelpOpen(true)}

@@ -89,6 +89,9 @@ interface State {
   helpOpen: boolean
   setHelpOpen: (open: boolean) => void
 
+  assistantOpen: boolean
+  setAssistantOpen: (open: boolean) => void
+
   /** Roadmap Section 6 Viewer Modes: Anatomy, Segmentation, Exploration */
   viewer3DMode: 'anatomy' | 'segmentation' | 'exploration'
   setViewer3DMode: (mode: 'anatomy' | 'segmentation' | 'exploration') => void
@@ -157,6 +160,9 @@ export const useStore = create<State>((set) => ({
 
   helpOpen: false,
   setHelpOpen: (helpOpen) => set({ helpOpen }),
+
+  assistantOpen: false,
+  setAssistantOpen: (assistantOpen) => set({ assistantOpen }),
 
   viewer3DMode: 'segmentation',
   setViewer3DMode: (viewer3DMode) => {

@@ -1,3 +1,4 @@
+import AssistantPanel from './components/AssistantPanel'
 import BottomActivityStrip from './components/BottomActivityStrip'
 import DatasetsPanel from './components/DatasetsPanel'
 import DisclaimerBanner from './components/DisclaimerBanner'
@@ -54,6 +55,7 @@ export default function App() {
       <UploadPanel />
       <DatasetsPanel />
       <HelpPanel />
+      <AssistantPanel />
 
       {/* Main Workspace Layout */}
       <div className="flex min-h-0 flex-1 overflow-hidden">

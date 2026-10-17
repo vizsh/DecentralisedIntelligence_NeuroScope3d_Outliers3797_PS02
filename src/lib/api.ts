@@ -325,3 +325,55 @@ export async function compareJobs(jobA: string, jobB: string): Promise<any | nul
 }
 
 export const predictionUrl = (jobId: string) => `${BASE}/api/jobs/${jobId}/prediction`
+
+// ---------------------------------------------------------------- Assistant (local Ollama only)
+// Clinician/trainee tool-copilot only — never patient-facing. The backend never sends it raw
+// image/voxel data, only a small docs corpus and an allow-listed subset of a job's already-
+// computed metadata fields. See backend/neuroscope/assistant.py for the guardrail design.
+
+export type AssistantMode = 'trainee' | 'clinician'
+
+export interface AssistantHealth {
+  available: boolean
+  chat_model: string
+  chat_model_ready: boolean
+  embed_model: string
+  embed_model_ready: boolean
+}
+
+export async function assistantHealth(): Promise<AssistantHealth | null> {
+  try {
+    const res = await fetch(`${BASE}/api/assistant/health`)
+    if (!res.ok) return null
+    return await res.json()
+  } catch {
+    return null
+  }
+}
+
+export interface AssistantAnswer {
+  answer: string
+  cited_fields: string[]
+  caveat: string | null
+  refused: boolean
+  mode: AssistantMode
+}
+
+export class AssistantError extends Error {}
+
+export async function assistantAsk(
+  question: string,
+  jobId: string | null,
+  mode: AssistantMode
+): Promise<AssistantAnswer> {
+  const res = await fetch(`${BASE}/api/assistant/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ question, job_id: jobId, mode }),
+  })
+  if (!res.ok) {
+    const detail = await res.json().catch(() => null)
+    throw new AssistantError(detail?.detail || `Assistant request failed (${res.status}).`)
+  }
+  return await res.json()
+}

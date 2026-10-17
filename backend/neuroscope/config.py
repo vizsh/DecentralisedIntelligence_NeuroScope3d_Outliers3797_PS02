@@ -22,6 +22,17 @@ DEFAULT_MAX_UPLOAD_BYTES = 1024 ** 3  # 1 GB per file, matches the validator's o
 DEFAULT_RETENTION_SECONDS = 23 * 3600
 DEFAULT_LOG_LEVEL = "INFO"
 
+# Local-only Ollama assistant — same "nothing leaves this machine" posture as the segmentation
+# pipeline. llama3.1:8b is the default: measured side-by-side against phi3:mini on identical
+# grounded questions, phi3:mini repeatedly produced generic, non-responsive answers despite
+# correct retrieval (e.g. asked what the agreement overlay's green colour means, it answered with
+# an unrelated stock phrase; llama3.1:8b answered correctly and concisely). Accuracy was the
+# explicit priority here, so the slower model is the default; set NEUROSCOPE_ASSISTANT_MODEL=
+# phi3:mini for faster, lower-fidelity answers if latency matters more in a given deployment.
+DEFAULT_OLLAMA_URL = "http://localhost:11434"
+DEFAULT_ASSISTANT_CHAT_MODEL = "llama3.1:8b"
+DEFAULT_ASSISTANT_EMBED_MODEL = "nomic-embed-text"
+
 
 @dataclass(frozen=True)
 class Settings:
@@ -32,6 +43,9 @@ class Settings:
     max_upload_bytes: int = DEFAULT_MAX_UPLOAD_BYTES
     retention_seconds: int = DEFAULT_RETENTION_SECONDS
     log_level: str = DEFAULT_LOG_LEVEL
+    ollama_url: str = DEFAULT_OLLAMA_URL
+    assistant_chat_model: str = DEFAULT_ASSISTANT_CHAT_MODEL
+    assistant_embed_model: str = DEFAULT_ASSISTANT_EMBED_MODEL
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -45,4 +59,7 @@ class Settings:
             max_upload_bytes=DEFAULT_MAX_UPLOAD_BYTES,
             retention_seconds=DEFAULT_RETENTION_SECONDS,
             log_level=os.environ.get("NEUROSCOPE_LOG_LEVEL", DEFAULT_LOG_LEVEL),
+            ollama_url=os.environ.get("NEUROSCOPE_OLLAMA_URL", DEFAULT_OLLAMA_URL),
+            assistant_chat_model=os.environ.get("NEUROSCOPE_ASSISTANT_MODEL", DEFAULT_ASSISTANT_CHAT_MODEL),
+            assistant_embed_model=os.environ.get("NEUROSCOPE_ASSISTANT_EMBED_MODEL", DEFAULT_ASSISTANT_EMBED_MODEL),
         )

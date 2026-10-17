@@ -33,6 +33,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from neuroscope import DISCLAIMER, __version__
 from neuroscope import nifti_io as nio
+from neuroscope.assistant import AssistantUnavailable
+from neuroscope.assistant import ask as assistant_ask
+from neuroscope.assistant import health as assistant_health
 from neuroscope.config import Settings
 from neuroscope.infer import HeuristicSegmenter, Segmenter, load_segmenter, stack_channels
 from neuroscope.limits import MAX_INFERENCE_VOXELS, BudgetExceeded, check_voxel_budget
@@ -195,6 +198,42 @@ def model_status():
         "checkpoint_sha256": getattr(info, "checkpoint_sha256", None),
         "tta_passes": getattr(segmenter, "tta_passes", 1),
         "hardware_target": "CPU (sliding-window) / T4 CUDA",
+    }
+
+
+@app.get("/api/assistant/health")
+def assistant_health_check():
+    """Mirrors /api/health's pattern for the segmentation model: checked once on panel open,
+    shown live, so the UI never offers a chat box the backend can't actually answer from."""
+    return assistant_health(SETTINGS)
+
+
+class AssistantChatRequest(BaseModel):
+    question: str
+    job_id: str | None = None
+    mode: str = "trainee"  # "trainee" | "clinician" — see neuroscope.assistant.Mode
+
+
+@app.post("/api/assistant/chat")
+def assistant_chat(req: AssistantChatRequest):
+    mode = req.mode if req.mode in ("trainee", "clinician") else "trainee"
+    job_metadata = None
+    if req.job_id:
+        if not _valid_job_id(req.job_id):
+            raise HTTPException(400, "Invalid job id.")
+        meta_path = _jobdir(req.job_id) / "metadata.json"
+        if meta_path.exists():
+            job_metadata = json.loads(meta_path.read_text())
+    try:
+        result = assistant_ask(req.question, job_metadata=job_metadata, mode=mode, settings=SETTINGS)
+    except AssistantUnavailable as exc:
+        raise HTTPException(503, str(exc)) from exc
+    return {
+        "answer": result.answer,
+        "cited_fields": result.cited_fields,
+        "caveat": result.caveat,
+        "refused": result.refused,
+        "mode": result.mode,
     }
 
 
