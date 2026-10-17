@@ -106,6 +106,35 @@ interface State {
   setClippingAxis: (axis: 'axial' | 'coronal' | 'sagittal') => void
   clippingOffset: number
   setClippingOffset: (offset: number) => void
+
+  /** State-of-the-Art 3D Twin Deep Experience Modes & Anatomical Controls */
+  twin3DMode: 'cinematic' | 'diagnostic' | 'surgical' | 'uncertainty' | 'exploded'
+  setTwin3DMode: (mode: 'cinematic' | 'diagnostic' | 'surgical' | 'uncertainty' | 'exploded') => void
+
+  showVentricles: boolean
+  setShowVentricles: (show: boolean) => void
+
+  showEloquentCortex: boolean
+  setShowEloquentCortex: (show: boolean) => void
+
+  showWhiteMatterTracts: boolean
+  setShowWhiteMatterTracts: (show: boolean) => void
+
+  showSurgicalTrajectory: boolean
+  setShowSurgicalTrajectory: (show: boolean) => void
+
+  explosionOffset: number
+  setExplosionOffset: (offset: number) => void
+
+  activeProbe: any | null
+  setActiveProbe: (probe: any | null) => void
+
+  ruler3DPoints: Vec3[]
+  pushRuler3DPoint: (p: Vec3) => void
+  clearRuler3D: () => void
+
+  activeEloquentZone: string | null
+  setActiveEloquentZone: (id: string | null) => void
 }
 
 export const useStore = create<State>((set) => ({
@@ -196,4 +225,63 @@ export const useStore = create<State>((set) => ({
   setClippingAxis: (clippingAxis) => set({ clippingAxis }),
   clippingOffset: 0,
   setClippingOffset: (clippingOffset) => set({ clippingOffset }),
+
+  twin3DMode: 'cinematic',
+  setTwin3DMode: (twin3DMode) => {
+    if (twin3DMode === 'surgical') {
+      set({
+        twin3DMode,
+        showVentricles: true,
+        showEloquentCortex: true,
+        showWhiteMatterTracts: true,
+        showSurgicalTrajectory: true,
+        brainOpacity: 0.15,
+        autoOrbit: false,
+      })
+    } else if (twin3DMode === 'diagnostic') {
+      set({
+        twin3DMode,
+        showVentricles: false,
+        showEloquentCortex: false,
+        showWhiteMatterTracts: false,
+        showSurgicalTrajectory: false,
+        brainOpacity: 0.18,
+        explosionOffset: 0,
+      })
+    } else if (twin3DMode === 'exploded') {
+      set({
+        twin3DMode,
+        explosionOffset: 22,
+        brainOpacity: 0.1,
+        autoOrbit: false,
+      })
+    } else {
+      set({ twin3DMode })
+    }
+  },
+
+  showVentricles: false,
+  setShowVentricles: (showVentricles) => set({ showVentricles }),
+
+  showEloquentCortex: false,
+  setShowEloquentCortex: (showEloquentCortex) => set({ showEloquentCortex }),
+
+  showWhiteMatterTracts: false,
+  setShowWhiteMatterTracts: (showWhiteMatterTracts) => set({ showWhiteMatterTracts }),
+
+  showSurgicalTrajectory: false,
+  setShowSurgicalTrajectory: (showSurgicalTrajectory) => set({ showSurgicalTrajectory }),
+
+  explosionOffset: 0,
+  setExplosionOffset: (explosionOffset) => set({ explosionOffset }),
+
+  activeProbe: null,
+  setActiveProbe: (activeProbe) => set({ activeProbe }),
+
+  ruler3DPoints: [],
+  pushRuler3DPoint: (p) => set((s) => ({ ruler3DPoints: s.ruler3DPoints.length >= 2 ? [p] : [...s.ruler3DPoints, p] })),
+  clearRuler3D: () => set({ ruler3DPoints: [] }),
+
+  activeEloquentZone: null,
+  setActiveEloquentZone: (activeEloquentZone) => set({ activeEloquentZone }),
 }))

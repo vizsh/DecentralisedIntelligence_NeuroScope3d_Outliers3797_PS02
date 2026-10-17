@@ -3,6 +3,7 @@ import { create } from 'zustand'
 export type WorkspaceKey =
   | 'dashboard'
   | 'viewer'
+  | 'deep-twin'
   | 'review'
   | 'research'
   | 'trust'

@@ -1,6 +1,7 @@
 import {
   LayoutDashboard,
   Box,
+  Activity,
   CheckCircle2,
   FlaskConical,
   ShieldCheck,
@@ -38,8 +39,16 @@ const NAV_ITEMS: NavItem[] = [
     Icon: Box,
   },
   {
-    key: 'review',
+    key: 'deep-twin',
     number: '03',
+    label: 'Deep Neuro-Twin Atlas',
+    shortLabel: 'Risk Atlas',
+    badge: 'VASCULAR',
+    Icon: Activity,
+  },
+  {
+    key: 'review',
+    number: '04',
     label: 'Segmentation Review',
     shortLabel: 'Review',
     badge: 'QC',
@@ -47,7 +56,7 @@ const NAV_ITEMS: NavItem[] = [
   },
   {
     key: 'research',
-    number: '04',
+    number: '05',
     label: 'Research Lab',
     shortLabel: 'Cohort',
     badge: '10 Cases',
@@ -55,7 +64,7 @@ const NAV_ITEMS: NavItem[] = [
   },
   {
     key: 'trust',
-    number: '05',
+    number: '06',
     label: 'Trust & Explainability',
     shortLabel: 'Trust',
     badge: 'Flip-TTA',
@@ -63,7 +72,7 @@ const NAV_ITEMS: NavItem[] = [
   },
   {
     key: 'patient',
-    number: '06',
+    number: '07',
     label: 'Patient Companion',
     shortLabel: 'Patient',
     badge: 'Clear',
@@ -71,14 +80,14 @@ const NAV_ITEMS: NavItem[] = [
   },
   {
     key: 'learn',
-    number: '07',
+    number: '08',
     label: 'NeuroLearn Academy',
     shortLabel: 'Learn',
     Icon: GraduationCap,
   },
   {
     key: 'graph',
-    number: '08',
+    number: '09',
     label: 'Research Graph',
     shortLabel: 'Graph',
     badge: 'DAG',
