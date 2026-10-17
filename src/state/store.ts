@@ -96,7 +96,7 @@ interface State {
   viewer3DMode: 'anatomy' | 'segmentation' | 'exploration'
   setViewer3DMode: (mode: 'anatomy' | 'segmentation' | 'exploration') => void
 
-  /** Interactive 3D clipping planes for neurosurgical exploration */
+  /** Interactive 3D clipping plane — a cutaway visualization tool, no clinical claim */
   clippingEnabled: boolean
   setClippingEnabled: (enabled: boolean) => void
   clippingAxis: 'axial' | 'coronal' | 'sagittal'

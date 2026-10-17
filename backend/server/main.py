@@ -474,7 +474,6 @@ async def inspect_study(
 
 
 @app.post("/api/v1/studies/inspect-dicom")
-@app.post("/api/studies/inspect-dicom")
 async def inspect_dicom_study(
     files: list[UploadFile] = File(...),
 ):

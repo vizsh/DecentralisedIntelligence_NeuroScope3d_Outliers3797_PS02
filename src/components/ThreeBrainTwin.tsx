@@ -547,12 +547,17 @@ export default function ThreeBrainTwin() {
         </div>
       </div>
 
-      {/* Neurosurgical Clipping HUD (Page 4/5 Clinical Utility) */}
+      {/* Cutaway view: a clipping plane through the 3D mesh, a standard visualization
+          technique (same as any CAD/medical-imaging 3D viewer's "cut plane" tool) —
+          named and framed as visualization only. Never call this "surgical" anywhere:
+          CLAUDE.md rule 4 and the PS's own scope rules explicitly exclude surgical/
+          treatment planning, and this tool makes no claim about where an incision
+          would go or any other clinical utility — it only lets you see inside a mesh. */}
       <div className="absolute left-3 top-[252px] w-[232px] rounded-md border border-edge/80 bg-panel/85 px-3 py-2.5 backdrop-blur-sm">
         <div className="mb-1.5 flex items-center justify-between">
           <div className="flex items-center gap-1.5">
             <span className="font-sans text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-400">
-              Surgical Clipping
+              Cutaway View
             </span>
           </div>
           <button
