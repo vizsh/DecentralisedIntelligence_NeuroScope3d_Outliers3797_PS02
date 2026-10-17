@@ -7,6 +7,7 @@ import NavigationSidebar from './components/NavigationSidebar'
 import TopBar from './components/TopBar'
 import UploadPanel from './components/UploadPanel'
 import CommandCentreWorkspace from './components/workspaces/CommandCentreWorkspace'
+import LandingWorkspace from './components/workspaces/LandingWorkspace'
 import NeuroLearnWorkspace from './components/workspaces/NeuroLearnWorkspace'
 import PatientWorkspace from './components/workspaces/PatientWorkspace'
 import ResearchGraphWorkspace from './components/workspaces/ResearchGraphWorkspace'
@@ -65,6 +66,8 @@ export default function App() {
           key={activeWorkspace}
           className="animate-fade-in flex min-h-0 flex-1 flex-col overflow-hidden"
         >
+          {activeWorkspace === 'landing' && <LandingWorkspace />}
+
           {activeWorkspace === 'dashboard' && <CommandCentreWorkspace />}
 
           {activeWorkspace === 'viewer' && (

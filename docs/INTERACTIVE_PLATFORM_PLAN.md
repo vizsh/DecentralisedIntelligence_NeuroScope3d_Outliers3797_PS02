@@ -170,7 +170,28 @@ see `CLAUDE.md`'s "known environment quirks" section.
 
 ---
 
-## 2. Designed but not built
+## 2. Landed since this table was written
+
+Two of the highest-value items here are done, not still "designed but not
+built" — recorded here so the next session doesn't re-propose them:
+
+- **DICOM ingestion** — a real DICOM series (or a zip of one) can be uploaded
+  directly: series grouped by `SeriesInstanceUID`, sorted along the slice
+  normal, a verified LPS→RAS affine, sequence auto-detection from
+  `SeriesDescription`/contrast tags, and a de-identification check that warns
+  rather than assumes. `backend/neuroscope/dicom_io.py`,
+  `POST /api/v1/studies/inspect-dicom`.
+- **Multi-workspace navigation** — landed as eight workspaces (Command Centre,
+  3D Studio Viewer, Segmentation Review, Research Lab, Trust &
+  Explainability, Patient Companion, NeuroLearn Academy, Research Graph), not
+  the five originally sketched here. One real data-integrity incident
+  happened building this and was fixed, not patched over — see the "Fix
+  fabricated data and diagnosis-adjacent wording across new workspaces"
+  commit before adding a new stat to any of these workspaces.
+- **A local tool copilot** was not on this list at all when it was written —
+  see [`docs/ASSISTANT.md`](ASSISTANT.md).
+
+## 3. Designed but not built
 
 From the feature plan and the reference images, in rough value order. Nothing
 here is started.
@@ -186,15 +207,13 @@ here is started.
 | **Guided first-run tour** | Five-step walkthrough built on the Help panel primitives | Onboarding friction is the real adoption blocker |
 | **Interactive case builder** | Expose `make_demo_gallery.py`'s lesion parameters as sliders, generate and segment live | Teaching-hospital use case; no new model work |
 | **Atlas-relative localisation** | "Which lobe", not just "which side" | Affine-only alignment, disclosed as approximate |
-| **DICOM ingestion** | Accept what a resident's worklist actually contains | Highest real-world-adoption leverage of anything on this list |
-| **Five-workspace navigation** | Analyse / Compare / Research Lab / Learn / Reports | Worth revisiting now that Datasets and Help exist as panels |
 
 Out of scope, restated: no diagnosis, grading, prognosis or treatment
 suggestion, even hedged. See `PRODUCT_GAPS_AND_IDEATION.md`.
 
 ---
 
-## 3. Design constraints for anything added here
+## 4. Design constraints for anything added here
 
 The incumbent visual world is authority — dark clinical workstation, tokens in
 `src/index.css` (`--color-ink`, `--color-panel`, `--color-edge`, region colours

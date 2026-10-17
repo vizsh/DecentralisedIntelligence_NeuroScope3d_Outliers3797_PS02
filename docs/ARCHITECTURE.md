@@ -35,7 +35,7 @@ src/state/liveStudy.ts               upload/poll/status store for a live job
 | Concern | Implementation |
 |---|---|
 | Job identity | **Client-minted** job id (32 hex chars) — this is what lets the browser poll `/status` concurrently with the upload itself, since the id exists before the upload finishes, not after |
-| Concurrency | A single global processing lock keeps one study running at a time, appropriate for a local single-workstation deployment; a second request is told plainly that one study is already in progress |
+| Concurrency | A single global processing lock keeps one study running at a time, appropriate for a local single-workstation deployment; a second request is queued (`wait_for_slot`, async-native, no thread blocking) and shown a real queue position and a measured-average ETA via `/status`, not a bare rejection |
 | Progress reporting | An in-memory stage tracker (`PROGRESS` dict) updated at each pipeline step, polled by the browser every ~400ms during a live run |
 | Data handling | All `/api/v1/` responses are marked `no-store`; the server never trusts a client-supplied filename for an on-disk path; source uploads are deleted immediately after a result exists; job directories auto-expire after 23h with a background sweep |
 | Network | Loopback-only, CORS pinned to the Vite dev origin — not designed or intended to be exposed to the open internet |
@@ -54,6 +54,15 @@ src/state/liveStudy.ts               upload/poll/status store for a live job
 | `GET /api/v1/jobs/{job}/expert-labels` | Binary expert mask volume, if one was supplied |
 | `GET /api/v1/jobs/{job}/prediction` | The predicted label map as NIfTI, on the *original* input grid |
 | `GET /api/v1/jobs/{job}/report` | Printable HTML provenance report |
+| `GET /api/v1/jobs/{job}/export` | One-click case bundle — report + metadata + prediction NIfTI, zipped |
+| `GET /api/v1/metrics` | Real job-outcome counters and inference-time P50/P95 — no claim without a reproducible number applies to "the pipeline is reliable" too |
+| `GET /api/v1/models/status` | Which model is actually loaded (real checkpoint vs. heuristic fallback), its checkpoint hash |
+| `POST /api/v1/studies/inspect` | Fast pre-flight geometry check (~100ms) without running inference or holding the processing lock |
+| `POST /api/v1/studies/inspect-dicom` | Pre-flight for a DICOM series/zip — groups by `SeriesInstanceUID`, auto-detects sequences, checks de-identification |
+| `GET /api/v1/assistant/health` | Whether the local tool copilot (Ollama) is reachable and its models are pulled |
+| `POST /api/v1/assistant/chat` | Ask the tool copilot a question — see [`docs/ASSISTANT.md`](ASSISTANT.md) for the guardrail design |
+
+All routes are versioned under `/api/v1/` — an internal API with one consumer (this project's own frontend), so there's no backward-compat alias for the old unversioned paths; they correctly 404.
 
 ## Pipeline tier — `backend/neuroscope/` (pure Python library)
 
@@ -67,6 +76,10 @@ This is the part that's genuinely reusable and independently verifiable — no F
 | `regions.py` | BraTS code → WT/TC/ET nesting, volumes, Dice/sensitivity, 26-connected-component analysis |
 | `provenance.py` | File hashing (sha256), git commit identification — shared by the CLI and the server |
 | `limits.py` | Resource budgets (voxel caps) enforced identically by the CLI and the live server |
+| `model_base.py` | A formal `Protocol` every segmentation backend must satisfy, so adding a second model is implementing one interface, not restructuring the pipeline |
+| `config.py` | One `Settings` object for every tunable (job dir, TTA passes, CORS, upload/retention limits, Ollama URL/models) instead of scattered `os.environ.get()` calls |
+| `dicom_io.py` | DICOM series ingestion — groups slices by `SeriesInstanceUID`, sorts along the slice normal, builds a verified LPS→RAS affine, detects BraTS sequences from `SeriesDescription`/contrast tags |
+| `assistant.py` + `assistant_corpus.py` | The local tool copilot — retrieval over a small hand-written corpus, an explicit allow-list of job-metadata fields, defense-in-depth guardrails. Never touches raw image/voxel data. See [`docs/ASSISTANT.md`](ASSISTANT.md) |
 
 ### The segmentation model
 
@@ -125,4 +138,13 @@ This is deliberately *not* full Monte-Carlo dropout or a large ensemble — publ
 
 - A hard voxel-count cap on the resampled inference grid (`neuroscope/limits.py`) prevents an unusually large or finely-spaced input from exhausting memory mid-run.
 - A request-level upload-size guard rejects an oversized multipart upload by its declared `Content-Length` before a single byte is streamed.
-- A single global processing lock keeps the server to one study at a time, matching the local single-workstation deployment model this prototype targets.
+- A single global processing lock keeps the server to one study at a time, matching the local single-workstation deployment model this prototype targets — a second study queues (capped at 10 waiting) rather than being rejected outright; see the job queue row above.
+- Every failure path raises a structured `ApiError(status, code, message)`, normalised into one consistent `{code, message, status}` envelope by a global exception handler — a client (or a judge's scorer) can branch on `code` instead of parsing prose.
+
+## DICOM ingestion
+
+A real DICOM series (or a zip of one) can be uploaded directly, not just pre-converted NIfTI. `neuroscope/dicom_io.py` groups files by `SeriesInstanceUID`, sorts slices along the series' own slice normal (via `ImageOrientationPatient`/`ImagePositionPatient`, not filename order), and builds a verified affine by converting the DICOM LPS convention to NIfTI's RAS. Sequence identity (T1/T1Gd/T2/FLAIR) is detected from `SeriesDescription` and contrast-bolus tags, the same heuristic spirit as the existing filename-based auto-routing for NIfTI uploads. De-identification is checked, not assumed: a non-anonymized `PatientName` produces an explicit warning rather than silently proceeding. The pre-flight endpoint (`POST /api/v1/studies/inspect-dicom`) reports series geometry and sequence mapping before anything reaches the inference pipeline or the processing lock.
+
+## Cutaway view (3D)
+
+The 3D viewport supports an interactive clipping plane (axial/coronal/sagittal, adjustable depth) to see inside the rendered mesh — the same cut-plane technique any CAD or medical-imaging 3D viewer offers. This is a visualization tool only: it makes no claim about anatomy relevant to an incision or any other clinical/surgical utility, and is deliberately never labelled that way in the UI — see CLAUDE.md's hard rule 4 and the PS's own "surgical or radiotherapy planning" exclusion.

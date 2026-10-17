@@ -25,6 +25,7 @@ export default function TopBar() {
   const selectedStudyId = useWorkspaceStore((s) => s.selectedStudyId)
   const setSelectedStudyId = useWorkspaceStore((s) => s.setSelectedStudyId)
   const activeWorkspace = useWorkspaceStore((s) => s.activeWorkspace)
+  const setActiveWorkspace = useWorkspaceStore((s) => s.setActiveWorkspace)
 
   const handleStudyChange = (studyId: string) => {
     setSelectedStudyId(studyId)
@@ -93,6 +94,18 @@ export default function TopBar() {
 
       {/* Actions */}
       <div className="ml-auto flex items-center gap-2.5">
+        <button
+          onClick={() => setActiveWorkspace(activeWorkspace === 'landing' ? 'viewer' : 'landing')}
+          className={`flex items-center gap-1.5 rounded border px-2.5 py-1 text-[11px] font-medium transition ${
+            activeWorkspace === 'landing'
+              ? 'border-sky-400 bg-sky-500/25 text-sky-200'
+              : 'border-cyan-500/40 bg-cyan-500/10 text-cyan-300 hover:bg-cyan-500/20'
+          }`}
+        >
+          <span className="text-[10px]">✦</span>
+          <span>{activeWorkspace === 'landing' ? '3D Studio' : 'Neural Journey'}</span>
+        </button>
+
         <button
           onClick={() => setDatasetsOpen(true)}
           className="hidden rounded border border-edge bg-panel-2 px-2.5 py-1 text-[11px] text-slate-300 transition hover:border-slate-500 hover:text-slate-100 sm:inline"

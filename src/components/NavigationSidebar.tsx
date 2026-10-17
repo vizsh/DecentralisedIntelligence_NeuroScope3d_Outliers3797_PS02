@@ -8,6 +8,7 @@ import {
   GraduationCap,
   Network,
   Menu,
+  Sparkles,
 } from 'lucide-react'
 import { useWorkspaceStore, type WorkspaceKey } from '../state/workspaceStore'
 
@@ -21,6 +22,14 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
+  {
+    key: 'landing',
+    number: '00',
+    label: 'Neural Journey Landing',
+    shortLabel: 'Landing',
+    badge: 'Story',
+    Icon: Sparkles,
+  },
   {
     key: 'dashboard',
     number: '01',

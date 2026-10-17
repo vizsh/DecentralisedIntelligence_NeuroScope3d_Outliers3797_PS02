@@ -40,7 +40,8 @@ This isn't a mockup. Every claim below is a measured result, reproducible from t
 | **Dice 0.88 / 0.87 / 0.79** | WT / TC / ET, measured on **10 real, held-out** Medical Segmentation Decathlon cases — the PS's ≥10-case requirement, closed ([details](docs/VERIFICATION.md#real-data-accuracy-10-held-out-medical-segmentation-decathlon-cases)) |
 | **~60–75s / case** | measured end-to-end, CPU-only, against a 120s budget on a T4 GPU |
 | **Live uncertainty** | flip-based TTA ensemble — a *measured* confidence signal, not a guess, visible as a heat-map overlay |
-| **0 cloud calls** | fully local inference; uploads deleted immediately after processing, derived artefacts expire in 23h |
+| **σ correlation: 0.3463** | measured, not assumed — pooled across all 10 held-out cases (1.3M voxels), disagreement rate rises from 15.7% to ~65% as σ increases ([details](docs/VERIFICATION.md)) |
+| **0 cloud calls** | fully local inference *and* local chatbot (Ollama); uploads deleted immediately after processing, derived artefacts expire in 23h |
 
 ## Feature highlights
 
@@ -53,7 +54,12 @@ This isn't a mockup. Every claim below is a measured result, reproducible from t
 - **Measure & window/contrast** — click two points for a real distance in mm from the scan's own spacing; drag to re-window the display, same way a clinical viewer does.
 - **Quality Check Centre** — an itemised, real-validator-driven report (not a single PASS badge) of every check a study was put through.
 - **A curated dataset gallery** — three synthetic reference cases plus real, de-identified Decathlon cases, runnable from the UI in one click.
-- **Provenance & reporting** — checkpoint hash, input hashes, code commit, every validation warning, bundled into a printable report.
+- **Provenance & reporting** — checkpoint hash, input hashes, code commit, every validation warning, bundled into a printable report, plus a one-click **case export bundle** (report + metadata + prediction NIfTI, zipped).
+- **DICOM ingestion** — upload a real DICOM series (or a zip of one) directly; series are grouped by UID, sequences auto-detected from `SeriesDescription`/contrast tags, geometry verified, and de-identification checked (with a warning if `PatientName` isn't anonymized) before anything reaches the inference pipeline.
+- **Cutaway view** — an interactive clipping plane through the 3D mesh (axial/coronal/sagittal, adjustable depth) to see inside the model — a standard visualization technique, not a clinical or surgical-planning claim.
+- **A local, guard-railed tool copilot** — explains this tool's own measurements in plain language (clinician/trainee-facing only, never patient-facing), runs entirely against a local Ollama instance, with defense-in-depth guardrails verified against a 29-prompt adversarial pack ([details](docs/ASSISTANT.md)).
+- **Multi-workspace navigation** — Command Centre, 3D Studio Viewer, Segmentation Review, Research Lab, Trust & Explainability, Patient Companion, NeuroLearn Academy, Research Graph.
+- **A real job queue** — a second upload while one study is processing gets a live queue position and a measured-average ETA, not a bare "busy, try again."
 
 See [`docs/FEATURES.md`](docs/FEATURES.md) for the full breakdown by category.
 
@@ -65,6 +71,11 @@ See [`docs/FEATURES.md`](docs/FEATURES.md) for the full breakdown by category.
 ## Architecture
 
 A three-tier system: a React single-page app in the browser, a local FastAPI inference server, and a pure-Python pipeline library the server wraps — independently testable, with the pipeline shipping its own CLI and judge-scoring harness separate from the web server.
+
+<p align="center">
+  <img src="docs/assets/workflow_dataflow_diagram.jpg" alt="Tumor Lens / NeuroScope 3D — End-to-End Workflow & Data Flow Architecture" width="840">
+</p>
+<p align="center"><em>End-to-end clinical data flow: multi-sequence MRI & DICOM ingestion → pre-flight validation → MONAI SegResNet sliding window inference + Flip-TTA uncertainty → Surface Nets digital twin extraction → multi-stakeholder workspaces (synchronized MPR, 3D surgical clipping, cohort benchmarks).</em></p>
 
 <p align="center">
   <img src="docs/assets/diagram_architecture.png" alt="System architecture: browser, FastAPI server, neuroscope pipeline, MONAI model" width="720">
@@ -101,9 +112,14 @@ python backend/make_testcase.py --out ./testdata
 python backend/run_judge_tests.py --data ./testdata --model bundle
 
 # Real tumour data, without a 7.6 GB download — see "Real data" below
-python backend/tools/fetch_decathlon_sample.py --count 4 --out backend/data/raw_sample --index-cache backend/data/raw_sample/index_cache.json
+python backend/tools/fetch_decathlon_sample.py --count 10 --out backend/data/raw_sample --index-cache backend/data/raw_sample/index_cache.json
 python backend/tools/convert_decathlon.py --root backend/data/raw_sample/Task01_BrainTumour --out backend/data
-python backend/evaluate.py --root backend/data/decathlon --limit 4 --out backend/data/real_sample_eval.json --model bundle
+python backend/evaluate.py --root backend/data/decathlon --limit 10 --out backend/data/real_sample_eval.json --model bundle
+
+# Tool copilot (optional — everything else works without it)
+ollama serve
+ollama pull llama3.1:8b && ollama pull nomic-embed-text
+python backend/run_assistant_guardrail_tests.py   # verifies the no-diagnosis guardrails before you trust it
 ```
 
 Open `http://localhost:5173`, click **Upload case**, drop in four NIfTI sequences (`.nii`/`.nii.gz`), and watch it segment live. No upload yet? The workspace renders a fully interactive synthetic demo case on load, or pick a real case from the **Datasets** panel.
@@ -112,7 +128,7 @@ Open `http://localhost:5173`, click **Upload case**, drop in four NIfTI sequence
 
 ## Real data, the clever part
 
-Medical Segmentation Decathlon's Task01_BrainTumour archive is one 7.6 GB tar. `tools/fetch_decathlon_sample.py` doesn't download it — it walks the table of contents using one small HTTP Range request per entry (tar's fixed 512-byte member headers state each member's exact size), then fetches only the selected cases' actual image+label bytes in full. Result: **~38 MB instead of 7.6 GB** for 4 real, full-resolution cases. `tools/convert_decathlon.py` then splits each 4D volume into the four per-modality files this pipeline expects and remaps Decathlon's label codes to BraTS 1/2/4 — the two code systems differ and that mapping is exactly the kind of silent bug this project doesn't let through untested (`backend/tests/`).
+Medical Segmentation Decathlon's Task01_BrainTumour archive is one 7.6 GB tar. `tools/fetch_decathlon_sample.py` doesn't download it — it walks the table of contents using one small HTTP Range request per entry (tar's fixed 512-byte member headers state each member's exact size), then fetches only the selected cases' actual image+label bytes in full. Result: **~99 MB instead of 7.6 GB** for the 10 real, full-resolution cases this project's held-out evaluation uses. `tools/convert_decathlon.py` then splits each 4D volume into the four per-modality files this pipeline expects and remaps Decathlon's label codes to BraTS 1/2/4 — the two code systems differ and that mapping is exactly the kind of silent bug this project doesn't let through untested (`backend/tests/`).
 
 ## Documentation
 
@@ -125,7 +141,8 @@ Medical Segmentation Decathlon's Task01_BrainTumour archive is one 7.6 GB tar. `
 | [`docs/MODEL_CARD.md`](docs/MODEL_CARD.md) | Model name, version, licence, training data, preprocessing, known limitations |
 | [`docs/IMPLEMENTATION_PLAN.md`](docs/IMPLEMENTATION_PLAN.md) | **The active backend work plan** — real data acquisition, multi-model benchmarking, hardening, phased and sequenced |
 | [`docs/INTERACTIVE_PLATFORM_PLAN.md`](docs/INTERACTIVE_PLATFORM_PLAN.md) | **The active product-surface work plan** — what's landed (measure tool, window/contrast, agreement overlay, Quality Centre, dataset gallery) and what's next, in order |
-| [`docs/BACKEND_ROADMAP.md`](docs/BACKEND_ROADMAP.md) | Earlier phased backend plan — many items already closed; check status markers |
+| [`docs/BACKEND_ROADMAP.md`](docs/BACKEND_ROADMAP.md) | Earlier phased backend plan — nearly every item closed; check status markers |
+| [`docs/ASSISTANT.md`](docs/ASSISTANT.md) | The local tool copilot's architecture, guardrail design (defense in depth, not one prompt), and its adversarial test pack |
 | [`docs/PRODUCT_GAPS_AND_IDEATION.md`](docs/PRODUCT_GAPS_AND_IDEATION.md) | Gap analysis against real radiology workflows, and feature ideation with an explicit compliance note on what's out of scope |
 | [`reports/NeuroScope 3D landscape research.md`](<reports/NeuroScope 3D landscape research.md>) | The original competitive/literature landscape research this whole approach is grounded in |
 
@@ -133,22 +150,29 @@ Medical Segmentation Decathlon's Task01_BrainTumour archive is one 7.6 GB tar. `
 
 ```
 backend/
-  neuroscope/        pure-Python pipeline library (validate, infer, regions, provenance, limits, config)
-  server/             FastAPI app — job lifecycle, live progress, samples, the HTTP API
+  neuroscope/        pure-Python pipeline library (validate, infer, regions, provenance, limits, config,
+                     assistant.py + assistant_corpus.py for the tool copilot, dicom_io.py for DICOM ingestion)
+  server/             FastAPI app — job lifecycle, job queue, live progress, samples, metrics, the /api/v1 HTTP API
   tools/               convert_decathlon.py, fetch_decathlon_sample.py, make_demo_gallery.py
-  tests/               pytest suite (27 tests — validate, regions, model_base)
-  data/                 Decathlon conversion output, split manifest, real eval results (gitignored, regenerable)
-  samples/              curated demo + real cases served by /api/samples
+  tests/               pytest suite (48 tests — validate, regions, model_base, inspect, queue, metrics, export)
+  data/                 Decathlon conversion output, split manifest, real eval + calibration-check results (gitignored, regenerable)
+  samples/              curated demo + real cases served by /api/v1/samples
   predict.py          CLI entry point (what the judges' scorer calls)
   evaluate.py         Dice/sensitivity scoring over a BraTS-style folder tree
+  calibration_check.py  measures whether flip-TTA σ correlates with real disagreement (Phase 3c)
   make_testcase.py    generates the full synthetic judge test pack
   run_judge_tests.py  runs the judge test pack and reports PASS/FAIL
+  run_assistant_guardrail_tests.py  adversarial prompt pack for the tool copilot
   setup_model.py      downloads + sha256-verifies the MONAI checkpoint
+  Dockerfile           backend container image (see docker-compose.yml at repo root)
 src/
-  components/         3D viewer, linked MPR grid, upload panel, metrics bar, Datasets/Help panels, Quality Centre
+  components/         3D viewer, linked MPR grid, upload panel, metrics bar, Datasets/Help/Assistant panels, Quality Centre
+  components/workspaces/  multi-workspace shell (Command Centre, 3D Studio, Review, Research Lab, Trust, Patient, NeuroLearn, Research Graph)
   lib/                 meshing (Surface Nets), volume/affine math, API client, keyboard shortcuts, sequence auto-detect
-  state/               Zustand stores (crosshair, regions, live-study status)
-docs/                 architecture, problem framing, features, verification, model card, roadmap, active plans
+  state/               Zustand stores (crosshair, regions, live-study status, workspace shell)
+docs/                 architecture, problem framing, features, verification, model card, roadmap, active plans, assistant design
+.github/workflows/    CI — pytest + heuristic judge pack + frontend build on every push
+docker-compose.yml    one-command setup (frontend + backend + Ollama) — written, not build-verified in this dev environment
 ```
 
 ## Disclaimer
