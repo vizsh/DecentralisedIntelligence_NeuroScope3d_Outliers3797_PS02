@@ -19,6 +19,10 @@
 
 ---
 
+### Contents
+
+[Why this exists](#why-this-exists) · [What's working today](#whats-actually-working-today) · [Features](#feature-highlights) · [Architecture](#architecture) · [Quickstart](#quickstart) · [Real data](#real-data-the-clever-part) · [Documentation](#documentation) · [Repository layout](#repository-layout) · [Disclaimer](#disclaimer) · [Licence & credits](#licence--credits)
+
 ## Why this exists
 
 A brain MRI study for suspected glioma isn't one image — it's four 3D sequences (T1, T1Gd, T2, FLAIR), each roughly 155 slices, 620 flat images per case. Today, understanding a tumour's true 3D shape means scrolling through all of them and reconstructing it mentally: *is it one mass or two, which side is it on, how big is it in millilitres* — and a confident-looking AI overlay on one 2D slice doesn't tell you whether the 3D prediction underneath it is actually correct.
@@ -42,6 +46,7 @@ This isn't a mockup. Every claim below is a measured result, reproducible from t
 | **Live uncertainty** | flip-based TTA ensemble — a *measured* confidence signal, not a guess, visible as a heat-map overlay |
 | **σ correlation: 0.3463** | measured, not assumed — pooled across all 10 held-out cases (1.3M voxels), disagreement rate rises from 15.7% to ~65% as σ increases ([details](docs/VERIFICATION.md)) |
 | **0 cloud calls** | fully local inference *and* local chatbot (Ollama); uploads deleted immediately after processing, derived artefacts expire in 23h |
+| **48 pytest tests** | unit coverage for validation, regions, the model adapter, the job queue, metrics, and case export — `cd backend && python -m pytest tests/ -q` |
 
 ## Feature highlights
 
@@ -59,7 +64,9 @@ This isn't a mockup. Every claim below is a measured result, reproducible from t
 - **Cutaway view** — an interactive clipping plane through the 3D mesh (axial/coronal/sagittal, adjustable depth) to see inside the model — a standard visualization technique, not a clinical or surgical-planning claim.
 - **A local, guard-railed tool copilot** — explains this tool's own measurements in plain language (clinician/trainee-facing only, never patient-facing), runs entirely against a local Ollama instance, with defense-in-depth guardrails verified against a 29-prompt adversarial pack ([details](docs/ASSISTANT.md)).
 - **Multi-workspace navigation** — Command Centre, 3D Studio Viewer, Segmentation Review, Research Lab, Trust & Explainability, Patient Companion, NeuroLearn Academy, Research Graph.
-- **A real job queue** — a second upload while one study is processing gets a live queue position and a measured-average ETA, not a bare "busy, try again."
+- **A real job queue** — a second upload while one study is processing gets a live queue position and a measured-average ETA, not a bare "busy, try again." The study selector and Datasets panel lock with a visible stage indicator while a run is in flight, so a demo never silently stacks jobs.
+- **Prewarmed dataset cache** — every curated sample is still a real, deterministic run through the full pipeline, but a prewarm step (`backend/tools/prewarm_samples.py`) caches each one's output once so a later click returns in under a second (⚡ instant badge) instead of re-running inference live — verified: a cold-server restart served a cached case end-to-end in 0.98s.
+- **Case-by-case error explorer** — the Segmentation Review workspace computes false-positive/false-negative regions live from each case's own predicted-vs-expert masks (not a canned example), with real per-case volumes, centroid coordinates, and one-click navigation to each.
 
 See [`docs/FEATURES.md`](docs/FEATURES.md) for the full breakdown by category.
 
@@ -73,9 +80,9 @@ See [`docs/FEATURES.md`](docs/FEATURES.md) for the full breakdown by category.
 A three-tier system: a React single-page app in the browser, a local FastAPI inference server, and a pure-Python pipeline library the server wraps — independently testable, with the pipeline shipping its own CLI and judge-scoring harness separate from the web server.
 
 <p align="center">
-  <img src="docs/assets/workflow_dataflow_diagram.jpg" alt="Tumor Lens / NeuroScope 3D — End-to-End Workflow & Data Flow Architecture" width="840">
+  <img src="docs/assets/workflow_dataflow_diagram.jpg" alt="NeuroScope 3D — End-to-End Workflow & Data Flow Architecture" width="840">
 </p>
-<p align="center"><em>End-to-end clinical data flow: multi-sequence MRI & DICOM ingestion → pre-flight validation → MONAI SegResNet sliding window inference + Flip-TTA uncertainty → Surface Nets digital twin extraction → multi-stakeholder workspaces (synchronized MPR, 3D surgical clipping, cohort benchmarks).</em></p>
+<p align="center"><em>End-to-end data flow: multi-sequence MRI & DICOM ingestion → pre-flight validation → MONAI SegResNet sliding-window inference + Flip-TTA uncertainty → Surface Nets digital-twin extraction → multi-workspace review (synchronized MPR, 3D cutaway view, cohort benchmarks). Visualization only — no step in this pipeline makes a surgical, treatment, or diagnostic claim; see <a href="#disclaimer">Disclaimer</a>.</em></p>
 
 <p align="center">
   <img src="docs/assets/diagram_architecture.png" alt="System architecture: browser, FastAPI server, neuroscope pipeline, MONAI model" width="720">
