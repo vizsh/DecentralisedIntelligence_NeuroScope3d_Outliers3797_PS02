@@ -37,23 +37,23 @@ src/state/liveStudy.ts               upload/poll/status store for a live job
 | Job identity | **Client-minted** job id (32 hex chars) — this is what lets the browser poll `/status` concurrently with the upload itself, since the id exists before the upload finishes, not after |
 | Concurrency | A single global processing lock keeps one study running at a time, appropriate for a local single-workstation deployment; a second request is told plainly that one study is already in progress |
 | Progress reporting | An in-memory stage tracker (`PROGRESS` dict) updated at each pipeline step, polled by the browser every ~400ms during a live run |
-| Data handling | All `/api/` responses are marked `no-store`; the server never trusts a client-supplied filename for an on-disk path; source uploads are deleted immediately after a result exists; job directories auto-expire after 23h with a background sweep |
+| Data handling | All `/api/v1/` responses are marked `no-store`; the server never trusts a client-supplied filename for an on-disk path; source uploads are deleted immediately after a result exists; job directories auto-expire after 23h with a background sweep |
 | Network | Loopback-only, CORS pinned to the Vite dev origin — not designed or intended to be exposed to the open internet |
 
 ### API surface
 
 | Endpoint | Purpose |
 |---|---|
-| `GET /api/health` | Reports whether the real model checkpoint is loaded, or the pipeline is running on the heuristic smoke-test fallback |
-| `POST /api/segment/{job}` | Upload 4 required sequences + optional expert mask, run the full pipeline synchronously |
-| `GET /api/jobs/{job}/status` | Current pipeline stage, polled live during processing |
-| `GET /api/jobs/{job}/metadata` | Full provenance + results JSON for a completed job |
-| `GET /api/jobs/{job}/volume/{seq}` | Binary uint8 volume for one sequence, on the shared display grid |
-| `GET /api/jobs/{job}/labels` | Binary predicted label volume |
-| `GET /api/jobs/{job}/uncertainty/{region}` | Binary flip-TTA uncertainty volume for WT/TC/ET |
-| `GET /api/jobs/{job}/expert-labels` | Binary expert mask volume, if one was supplied |
-| `GET /api/jobs/{job}/prediction` | The predicted label map as NIfTI, on the *original* input grid |
-| `GET /api/jobs/{job}/report` | Printable HTML provenance report |
+| `GET /api/v1/health` | Reports whether the real model checkpoint is loaded, or the pipeline is running on the heuristic smoke-test fallback |
+| `POST /api/v1/segment/{job}` | Upload 4 required sequences + optional expert mask, run the full pipeline synchronously |
+| `GET /api/v1/jobs/{job}/status` | Current pipeline stage, polled live during processing |
+| `GET /api/v1/jobs/{job}/metadata` | Full provenance + results JSON for a completed job |
+| `GET /api/v1/jobs/{job}/volume/{seq}` | Binary uint8 volume for one sequence, on the shared display grid |
+| `GET /api/v1/jobs/{job}/labels` | Binary predicted label volume |
+| `GET /api/v1/jobs/{job}/uncertainty/{region}` | Binary flip-TTA uncertainty volume for WT/TC/ET |
+| `GET /api/v1/jobs/{job}/expert-labels` | Binary expert mask volume, if one was supplied |
+| `GET /api/v1/jobs/{job}/prediction` | The predicted label map as NIfTI, on the *original* input grid |
+| `GET /api/v1/jobs/{job}/report` | Printable HTML provenance report |
 
 ## Pipeline tier — `backend/neuroscope/` (pure Python library)
 

@@ -61,8 +61,10 @@ export default function TrustExplainabilityWorkspace() {
         <span className="text-sky-400 text-[13px] font-bold">ℹ</span>
         <div className="text-[11px] text-slate-300 leading-relaxed">
           <strong className="text-sky-200">Scientific Trust Definition:</strong> An uncertainty heatmap is an estimate of{' '}
-          <strong>model inconsistency under perturbation (flip-TTA σ)</strong>, not a ground truth error map. While boundary
-          uncertainty strongly correlates with rater ambiguity, low uncertainty alone does not guarantee absence of error.
+          <strong>model inconsistency under perturbation (flip-TTA σ)</strong>, not a ground truth error map. Measured
+          against all 10 real held-out cases (below), σ shows a real, positive, <strong>moderate</strong> correlation with
+          disagreement against the expert mask — not a strong one, and not a calibrated probability. Low σ does not
+          guarantee absence of error.
         </div>
       </div>
 
@@ -167,20 +169,41 @@ export default function TrustExplainabilityWorkspace() {
               </p>
             </div>
 
-            <div className="rounded-md border border-amber-500/30 bg-amber-950/20 p-3.5 space-y-2">
-              <div className="flex items-center gap-2">
-                <span className="text-amber-400 text-[13px]">ℹ</span>
-                <span className="text-[11px] font-semibold text-amber-200">Not yet measured — stated honestly rather than estimated</span>
-              </div>
-              <p className="text-[10.5px] text-slate-300 leading-relaxed font-sans">
-                Flip-TTA σ is a measured disagreement-under-augmentation signal, not a calibrated probability — that caveat
-                is shown everywhere σ appears in this platform. Whether σ actually correlates with real boundary error is a
-                real, answerable question now that ten real held-out cases exist (per-voxel σ vs. the expert mask), but it
-                has not been run yet. This is <span className="text-amber-200 font-medium">Phase 3c</span> of
-                docs/IMPLEMENTATION_PLAN.md — unblocked, no GPU required, and the next concrete step for this tab rather
-                than a number to guess at.
-              </p>
+            <div className="overflow-x-auto rounded border border-edge/80">
+              <table className="w-full text-left text-[11px] font-mono">
+                <thead className="bg-panel-2 text-[10px] text-slate-400 uppercase border-b border-edge">
+                  <tr>
+                    <th className="px-3 py-2">σ bin</th>
+                    <th className="px-3 py-2">WT-union voxels</th>
+                    <th className="px-3 py-2">Disagreement rate</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-edge/50">
+                  {[
+                    { bin: '0.00 – 0.10', voxels: '1,236,783', rate: '15.7%' },
+                    { bin: '0.10 – 0.20', voxels: '49,728', rate: '54.5%' },
+                    { bin: '0.20 – 0.35', voxels: '9,487', rate: '65.1%' },
+                    { bin: '0.35 – 0.50', voxels: '1,759', rate: '65.2%' },
+                    { bin: '0.50 – 1.00', voxels: '41 (tiny sample)', rate: '56.1%' },
+                  ].map((row) => (
+                    <tr key={row.bin} className="hover:bg-panel-2/30">
+                      <td className="px-3 py-2 font-bold text-slate-200">{row.bin}</td>
+                      <td className="px-3 py-2 text-slate-400">{row.voxels}</td>
+                      <td className="px-3 py-2 text-sky-300 font-bold">{row.rate}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
+
+            <p className="text-[10px] text-slate-500 leading-relaxed font-sans">
+              Measured, not estimated — pooled across all 10 real held-out cases (1,297,798 WT-union voxels), via
+              backend/calibration_check.py (Phase 3c of docs/IMPLEMENTATION_PLAN.md). Pooled Pearson correlation
+              between σ and real disagreement: <strong className="text-slate-300">0.3463</strong> — a real, positive,
+              moderate signal, not a formally calibrated probability. The highest bin's 56.1% sits on only 41 voxels
+              across all 10 cases and is too small a sample to read as a trend reversal. Full per-case breakdown:
+              backend/data/calibration_check.json.
+            </p>
           </div>
         </div>
       )}

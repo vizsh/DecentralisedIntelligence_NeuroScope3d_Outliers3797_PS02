@@ -162,8 +162,8 @@ separate things this one bug alone touched. Re-check anything new against a
 real, live-server-run case before calling it done, the way this round did.
 
 Note: ports 5173 and 8008 can be held by an older orphaned session between
-build sessions; a stale `uvicorn` process will still answer `/api/health`
-while predating a newly-added endpoint like `/api/samples`. Check
+build sessions; a stale `uvicorn` process will still answer `/api/v1/health`
+while predating a newly-added endpoint like `/api/v1/samples`. Check
 `netstat -ano | grep -E ":5173|:8008"` and compare the PID's age before
 assuming a "missing" endpoint is a code bug rather than a stale process —
 see `CLAUDE.md`'s "known environment quirks" section.

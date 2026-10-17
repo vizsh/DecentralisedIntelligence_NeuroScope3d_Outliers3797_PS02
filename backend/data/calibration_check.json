@@ -1,0 +1,346 @@
+{
+  "disclaimer": "Research and teaching prototype only. Never use model output as a diagnosis.",
+  "question": "Does flip-TTA sigma correlate with real disagreement against an expert WT mask?",
+  "method": "For every voxel in (predicted WT) union (expert WT) across all scored cases, bin by per-voxel flip-TTA sigma and compute the fraction where prediction != expert within that bin. Pooled Pearson correlation between sigma and the binary disagreement indicator is also reported.",
+  "caveat": "This correlates sigma with disagreement against one expert rater on a 10-case sample. It is real, measured evidence that the signal is informative, not proof of a general, formally calibrated confidence property.",
+  "model": {
+    "name": "MONAI brats_mri_segmentation (SegResNet)",
+    "version": "0.5.4",
+    "licence": "Apache-2.0",
+    "source": "MONAI Model Zoo, trained on BraTS 2018",
+    "deterministic": true,
+    "execution_mode": "model_inference",
+    "checkpoint_sha256": "860ccb3f1c21c99d0410ad8a1ac4ef6b8fab60cec0a503b0ba42675741a750ae"
+  },
+  "tta_passes": 2,
+  "cases_scored": 10,
+  "case_ids": [
+    "BRATS_206",
+    "BRATS_214",
+    "BRATS_218",
+    "BRATS_265",
+    "BRATS_306",
+    "BRATS_318",
+    "BRATS_365",
+    "BRATS_434",
+    "BRATS_449",
+    "BRATS_457"
+  ],
+  "skipped": [],
+  "pooled_voxel_count": 1297798,
+  "pooled_pearson_correlation_sigma_vs_disagreement": 0.3463,
+  "summary_by_bin": [
+    {
+      "sigma_bin": "0.00-0.10",
+      "voxel_count": 1236783,
+      "disagreement_count": 193661,
+      "disagreement_rate": 0.1566
+    },
+    {
+      "sigma_bin": "0.10-0.20",
+      "voxel_count": 49728,
+      "disagreement_count": 27092,
+      "disagreement_rate": 0.5448
+    },
+    {
+      "sigma_bin": "0.20-0.35",
+      "voxel_count": 9487,
+      "disagreement_count": 6177,
+      "disagreement_rate": 0.6511
+    },
+    {
+      "sigma_bin": "0.35-0.50",
+      "voxel_count": 1759,
+      "disagreement_count": 1147,
+      "disagreement_rate": 0.6521
+    },
+    {
+      "sigma_bin": "0.50-1.00",
+      "voxel_count": 41,
+      "disagreement_count": 23,
+      "disagreement_rate": 0.561
+    }
+  ],
+  "per_case": [
+    {
+      "case": "BRATS_206",
+      "seconds": 75.6,
+      "union_voxels": 269592,
+      "overall_disagreement_rate": 0.2142,
+      "by_bin": {
+        "0.00-0.10": {
+          "voxels": 255021,
+          "disagreements": 49908
+        },
+        "0.10-0.20": {
+          "voxels": 13888,
+          "disagreements": 7370
+        },
+        "0.20-0.35": {
+          "voxels": 683,
+          "disagreements": 464
+        },
+        "0.35-0.50": {
+          "voxels": 0,
+          "disagreements": 0
+        },
+        "0.50-1.00": {
+          "voxels": 0,
+          "disagreements": 0
+        }
+      }
+    },
+    {
+      "case": "BRATS_214",
+      "seconds": 73.9,
+      "union_voxels": 66272,
+      "overall_disagreement_rate": 0.522,
+      "by_bin": {
+        "0.00-0.10": {
+          "voxels": 51946,
+          "disagreements": 25155
+        },
+        "0.10-0.20": {
+          "voxels": 7923,
+          "disagreements": 5132
+        },
+        "0.20-0.35": {
+          "voxels": 4714,
+          "disagreements": 3208
+        },
+        "0.35-0.50": {
+          "voxels": 1651,
+          "disagreements": 1073
+        },
+        "0.50-1.00": {
+          "voxels": 38,
+          "disagreements": 23
+        }
+      }
+    },
+    {
+      "case": "BRATS_218",
+      "seconds": 71.3,
+      "union_voxels": 154703,
+      "overall_disagreement_rate": 0.1149,
+      "by_bin": {
+        "0.00-0.10": {
+          "voxels": 150164,
+          "disagreements": 15379
+        },
+        "0.10-0.20": {
+          "voxels": 4089,
+          "disagreements": 2123
+        },
+        "0.20-0.35": {
+          "voxels": 450,
+          "disagreements": 279
+        },
+        "0.35-0.50": {
+          "voxels": 0,
+          "disagreements": 0
+        },
+        "0.50-1.00": {
+          "voxels": 0,
+          "disagreements": 0
+        }
+      }
+    },
+    {
+      "case": "BRATS_265",
+      "seconds": 71.1,
+      "union_voxels": 218254,
+      "overall_disagreement_rate": 0.099,
+      "by_bin": {
+        "0.00-0.10": {
+          "voxels": 212834,
+          "disagreements": 18821
+        },
+        "0.10-0.20": {
+          "voxels": 4695,
+          "disagreements": 2322
+        },
+        "0.20-0.35": {
+          "voxels": 641,
+          "disagreements": 392
+        },
+        "0.35-0.50": {
+          "voxels": 84,
+          "disagreements": 65
+        },
+        "0.50-1.00": {
+          "voxels": 0,
+          "disagreements": 0
+        }
+      }
+    },
+    {
+      "case": "BRATS_306",
+      "seconds": 73.1,
+      "union_voxels": 33846,
+      "overall_disagreement_rate": 0.2545,
+      "by_bin": {
+        "0.00-0.10": {
+          "voxels": 32503,
+          "disagreements": 7810
+        },
+        "0.10-0.20": {
+          "voxels": 1229,
+          "disagreements": 724
+        },
+        "0.20-0.35": {
+          "voxels": 114,
+          "disagreements": 80
+        },
+        "0.35-0.50": {
+          "voxels": 0,
+          "disagreements": 0
+        },
+        "0.50-1.00": {
+          "voxels": 0,
+          "disagreements": 0
+        }
+      }
+    },
+    {
+      "case": "BRATS_318",
+      "seconds": 75.1,
+      "union_voxels": 100793,
+      "overall_disagreement_rate": 0.2298,
+      "by_bin": {
+        "0.00-0.10": {
+          "voxels": 95230,
+          "disagreements": 20039
+        },
+        "0.10-0.20": {
+          "voxels": 4727,
+          "disagreements": 2545
+        },
+        "0.20-0.35": {
+          "voxels": 836,
+          "disagreements": 581
+        },
+        "0.35-0.50": {
+          "voxels": 0,
+          "disagreements": 0
+        },
+        "0.50-1.00": {
+          "voxels": 0,
+          "disagreements": 0
+        }
+      }
+    },
+    {
+      "case": "BRATS_365",
+      "seconds": 75.0,
+      "union_voxels": 173312,
+      "overall_disagreement_rate": 0.162,
+      "by_bin": {
+        "0.00-0.10": {
+          "voxels": 169961,
+          "disagreements": 26244
+        },
+        "0.10-0.20": {
+          "voxels": 3108,
+          "disagreements": 1664
+        },
+        "0.20-0.35": {
+          "voxels": 243,
+          "disagreements": 173
+        },
+        "0.35-0.50": {
+          "voxels": 0,
+          "disagreements": 0
+        },
+        "0.50-1.00": {
+          "voxels": 0,
+          "disagreements": 0
+        }
+      }
+    },
+    {
+      "case": "BRATS_434",
+      "seconds": 77.7,
+      "union_voxels": 60606,
+      "overall_disagreement_rate": 0.2037,
+      "by_bin": {
+        "0.00-0.10": {
+          "voxels": 55594,
+          "disagreements": 9800
+        },
+        "0.10-0.20": {
+          "voxels": 3903,
+          "disagreements": 1985
+        },
+        "0.20-0.35": {
+          "voxels": 1084,
+          "disagreements": 553
+        },
+        "0.35-0.50": {
+          "voxels": 22,
+          "disagreements": 7
+        },
+        "0.50-1.00": {
+          "voxels": 3,
+          "disagreements": 0
+        }
+      }
+    },
+    {
+      "case": "BRATS_449",
+      "seconds": 72.2,
+      "union_voxels": 140741,
+      "overall_disagreement_rate": 0.0816,
+      "by_bin": {
+        "0.00-0.10": {
+          "voxels": 138713,
+          "disagreements": 10496
+        },
+        "0.10-0.20": {
+          "voxels": 1901,
+          "disagreements": 923
+        },
+        "0.20-0.35": {
+          "voxels": 126,
+          "disagreements": 69
+        },
+        "0.35-0.50": {
+          "voxels": 1,
+          "disagreements": 1
+        },
+        "0.50-1.00": {
+          "voxels": 0,
+          "disagreements": 0
+        }
+      }
+    },
+    {
+      "case": "BRATS_457",
+      "seconds": 73.2,
+      "union_voxels": 79679,
+      "overall_disagreement_rate": 0.1593,
+      "by_bin": {
+        "0.00-0.10": {
+          "voxels": 74817,
+          "disagreements": 10009
+        },
+        "0.10-0.20": {
+          "voxels": 4265,
+          "disagreements": 2304
+        },
+        "0.20-0.35": {
+          "voxels": 596,
+          "disagreements": 378
+        },
+        "0.35-0.50": {
+          "voxels": 1,
+          "disagreements": 1
+        },
+        "0.50-1.00": {
+          "voxels": 0,
+          "disagreements": 0
+        }
+      }
+    }
+  ]
+}

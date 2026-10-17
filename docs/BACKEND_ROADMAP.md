@@ -113,7 +113,7 @@ real-world input.
   before streaming a single byte, not only after the per-chunk loop catches
   it.
 - ~~Live pipeline-stage progress~~ — **done this pass**: the job id is now
-  minted client-side so the browser can poll `/api/jobs/{id}/status`
+  minted client-side so the browser can poll `/api/v1/jobs/{id}/status`
   concurrently with the upload, and the server reports stage transitions
   (`validating → resampling → segmenting → measuring → meshing →
   reporting → done`) as it goes. The upload panel shows the live stage and
@@ -130,7 +130,7 @@ real-world input.
   across `server/main.py`. Low risk, but worth doing before this file grows
   further.
 - ~~A real pytest suite~~ — **done**: `backend/tests/` wraps `validate.py`,
-  `regions.py`, `model_base.py`, the pre-flight `/api/studies/inspect`
+  `regions.py`, `model_base.py`, the pre-flight `/api/v1/studies/inspect`
   endpoint, and the job queue (42 tests total) as fast unit tests, so a
   future change to a validation threshold or the Dice formula is caught
   immediately rather than only by the slower, end-to-end
@@ -143,7 +143,7 @@ real-world input.
 - ~~Concurrency behaviour under load~~ — **done**: the single global `busy`
   lock now has a real FIFO queue in front of it (`server/main.py`'s
   `wait_for_slot`) — a second uploader gets a live queue position and a
-  measured-average ETA via `/api/jobs/{id}/status`, not a bare "busy, try
+  measured-average ETA via `/api/v1/jobs/{id}/status`, not a bare "busy, try
   again" rejection. See `backend/tests/test_queue.py`.
 
 ## Phase 3 — the actual differentiation (from the landscape research)

@@ -94,7 +94,8 @@ A full CPU run already lands comfortably inside the GPU budget — a strong sign
 - The entire geometry/safety pipeline — orientation correctness, reproducibility, anisotropic handling, affine agreement — independent of model quality (this was true even under the heuristic pipeline-smoke-test model, before the real checkpoint was wired in).
 - Real-model inference timing and Dice on the synthetic calibration case.
 - **Held-out Dice/sensitivity/HD95 on 10 real Decathlon cases** (above) — the PS's ≥10-case requirement, closed.
-- End-to-end server behaviour: a real curl/HTTP upload through `/api/segment/{job}`, live `/status` polling, and correct binary payload sizes served back to a browser-origin fetch.
+- **Uncertainty calibration** — whether flip-TTA σ correlates with real disagreement against the expert mask, pooled across all 10 held-out cases (1,297,798 WT-union voxels): a real, positive, moderate signal (Pearson 0.3463; disagreement rate rises from 15.7% in the lowest σ bin to 54.5–65.2% in the higher bins). See `backend/data/calibration_check.json`, reproduce with `python backend/calibration_check.py --root data/decathlon --limit 10`.
+- End-to-end server behaviour: a real curl/HTTP upload through `/api/v1/segment/{job}`, live `/status` polling, and correct binary payload sizes served back to a browser-origin fetch.
 - A real live-server run through the actual browser UI (not simulated), including the geometry, connectivity, uncertainty and agreement fields — see `docs/INTERACTIVE_PLATFORM_PLAN.md` for the bug this surfaced and fixed along the way.
 
 **Explicitly not yet confirmed, stated honestly rather than implied:**

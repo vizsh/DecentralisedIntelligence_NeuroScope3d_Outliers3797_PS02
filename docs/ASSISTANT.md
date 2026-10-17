@@ -21,7 +21,7 @@ the same line [`PRODUCT_GAPS_AND_IDEATION.md`](PRODUCT_GAPS_AND_IDEATION.md) alr
   own vocabulary and features (what Dice/HD95/σ mean, what the agreement overlay shows, why
   validation is all-or-nothing, etc.). This is retrieval content, not instructions — it cannot
   change what the assistant is *allowed* to say, only what background it can draw on.
-- `/api/assistant/health` and `/api/assistant/chat` in `backend/server/main.py`.
+- `/api/v1/assistant/health` and `/api/v1/assistant/chat` in `backend/server/main.py`.
 - `src/components/AssistantPanel.tsx` — the chat UI, opened from the "Assistant" button in
   `BottomActivityStrip.tsx`. A trainee/clinician mode toggle sets tone and verbosity, not safety
   behaviour — the guardrails below are identical in both modes.

@@ -39,7 +39,7 @@ just *compliant*:
    default: identity + one flip, `neuroscope.infer.Segmenter.predict`); the
    per-voxel standard deviation across passes is a real, measured
    disagreement signal, not a proxy. It's transported to the browser as its
-   own set of binary volumes (`/api/jobs/{id}/uncertainty/{region}`) on the
+   own set of binary volumes (`/api/v1/jobs/{id}/uncertainty/{region}`) on the
    same grid as everything else, shown as a toggleable heat-map overlay in
    the MPR views (replacing the segmentation wash, not hidden behind it) and
    as a mean/max-σ readout per region in the metrics bar — with an explicit
@@ -85,7 +85,7 @@ not just planned:
 - **Live stage progress, not a silent spinner.** The backend now reports
   pipeline stage transitions (`validating → resampling → segmenting →
   measuring → meshing → reporting → done`) through a pollable
-  `/api/jobs/{id}/status` endpoint, and the upload panel shows them live
+  `/api/v1/jobs/{id}/status` endpoint, and the upload panel shows them live
   with a stage bar. During a demo, the judges watch it actually move through
   "Running 3D segmentation — this is the slow step…" for the ~30 seconds
   that take real work, rather than staring at an ambiguous spinner that
@@ -204,8 +204,8 @@ strictly on the Layer 3 (trust) side of the line already drawn above.
 Status note: the two "Datasets" and "Help" items in category A were, until
 this round, dead nav-bar buttons with no handler — found and fixed alongside
 this ideation pass, not just proposed. See `src/components/DatasetsPanel.tsx`,
-`src/components/HelpPanel.tsx`, and the new `/api/samples` +
-`/api/samples/{id}/run/{job}` server endpoints.
+`src/components/HelpPanel.tsx`, and the new `/api/v1/samples` +
+`/api/v1/samples/{id}/run/{job}` server endpoints.
 
 ### A. Fixing what looked done but wasn't
 
@@ -261,7 +261,7 @@ not one. Nothing today lets them come back to case 3 after looking at case
   blocker in a busy teaching session, not missing features.
 - **Interactive "case builder"** — expose `make_demo_gallery.py`'s lesion
   parameters (size, position, single vs. multifocal) as sliders in the UI,
-  calling a new `/api/samples/build` endpoint that generates and
+  calling a new `/api/v1/samples/build` endpoint that generates and
   immediately segments a fresh synthetic case. Lets an instructor construct
   "what if the tumour were bigger / on the other side / split in two" live,
   in front of a room — directly serves the teaching-hospital use case named

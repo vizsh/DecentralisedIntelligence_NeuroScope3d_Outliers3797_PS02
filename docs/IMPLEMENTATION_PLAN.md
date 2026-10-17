@@ -70,7 +70,7 @@ Do not start Tier 2 until Phase 1a's data and split exist — training on an und
 
 **3b. Real `evaluate.py` run — done.** 10 held-out Decathlon cases scored (`backend/data/real_sample_eval.json`), patient-split disclosed via `decathlon_split.json`: WT Dice 0.8808 / TC 0.8697 / ET 0.7885, with HD95 and sensitivity alongside. Closes the PS's ≥10-case mandatory requirement. `docs/VERIFICATION.md` and `docs/MODEL_CARD.md` carry the actual numbers in place of the old "not yet measured" caveat; the pretraining-overlap caveat itself stays, since it's a real, unresolved limitation of the checkpoint's public release, not a placeholder.
 
-**3c. Uncertainty-calibration check.** Now that real labelled held-out data exists: does the flip-TTA σ signal actually correlate with real boundary error? This directly answers the caveat already flagged in `docs/ARCHITECTURE.md` ("naive uncertainty signals can correlate only weakly with true error") — measure it rather than continuing to caveat it abstractly.
+**3c. Uncertainty-calibration check — done.** `backend/calibration_check.py` measures whether flip-TTA σ actually correlates with real disagreement against the expert WT mask, pooled across all 10 real held-out cases (1,297,798 WT-union voxels). It does: disagreement rate rises from 15.7% in the lowest σ bin (0.00–0.10) to 54.5% (0.10–0.20) and 65.1–65.2% (0.20–0.50), pooled Pearson correlation 0.3463 — a real, positive, moderate signal, not proof of a formally calibrated probability. Full per-case and per-bin breakdown: `backend/data/calibration_check.json`. Reproduce: `cd backend && python calibration_check.py --root data/decathlon --limit 10 --out data/calibration_check.json`. This directly answers the caveat already flagged in `docs/ARCHITECTURE.md` ("naive uncertainty signals can correlate only weakly with true error") with a measured number instead of an abstract hedge — and the number itself confirms the caveat was the right one to make: the correlation is real but moderate, exactly the "informative but not a guarantee" framing the UI already uses everywhere σ appears.
 
 ### Phase 4 — Iron-clad backend hardening (independent of Phases 1–3, can run in parallel)
 
@@ -104,7 +104,7 @@ Phase 1 is the hard dependency everything else sits on. Tier 1 of Phase 2 (SegRe
 3. ~~Real `evaluate.py` run (Phase 3b) / HD95 (Phase 3a)~~ — **done.** Both landed; see `docs/VERIFICATION.md`.
 4. **Decide on a GPU environment** for Phase 2 Tier 2 (multi-model training/fine-tuning) — this is a decision only the user can make (cloud budget, a teammate's machine, waiting for organiser hardware) and remains the actual blocker on Phase 2.
 5. **Start the BraTS 2021 registration** (Phase 1b) now, in parallel, if not already underway — it's slow (account approval, DUA) and should not be the thing blocking the rest of this plan at the last minute.
-6. **Uncertainty-calibration check (Phase 3c)** — now unblocked by real labelled held-out data; the next unstarted item that needs no GPU and no human-gated step.
+6. ~~Uncertainty-calibration check (Phase 3c)~~ — **done.** Pooled Pearson correlation 0.3463 between σ and real disagreement across the 10 held-out cases; see Phase 3c above and `backend/data/calibration_check.json`.
 
 ## 5. Beyond the user's original ask — further ideation
 

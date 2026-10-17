@@ -90,7 +90,12 @@ function buildLabels(
   return out
 }
 
-export function generateStudy(caseId = 'BraTS2021_00657'): Study {
+// Default id for the procedurally-generated phantom. Never a real dataset's case ID —
+// BraTS 2021 itself has never been obtained (it's human-gated, see
+// docs/IMPLEMENTATION_PLAN.md Phase 1b) — so defaulting this to something that looks
+// like a real BraTS 2021 case id would be exactly the kind of fabricated-looking claim
+// CLAUDE.md's rule 1 exists to prevent, even though it's "just" a synthetic demo.
+export function generateStudy(caseId = 'synthetic_demo_phantom'): Study {
   const dims: Vec3 = [160, 192, 160]
   const spacing: Vec3 = [1.1, 1.1, 1.1]
   const affine = makeAffine(spacing, dims)

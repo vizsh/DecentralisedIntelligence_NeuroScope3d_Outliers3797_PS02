@@ -80,7 +80,7 @@ Turns the viewer from something you look at into something you interrogate.
 - **Measure** — click two points on any slice view for a real physical distance in mm, computed from that scan's own voxel spacing.
 - **Window / contrast** — drag to re-window the display (up/down adjusts centre, left/right adjusts width), the same interaction a clinical PACS viewer uses. Defaults reproduce the previous fixed display ramp exactly, so opening the tool changes nothing until touched.
 - **Keyboard shortcuts** — `C` crosshair, `M` measure, `W` window, `O` overlay toggle, `E`/`U` expert/uncertainty views, `A` agreement, `B` brain shell, `?` help, `Esc` to exit a tool — suppressed while a text field has focus.
-- **Dataset gallery** — three curated synthetic reference cases (unifocal, multifocal, large-diffuse) plus real, de-identified Decathlon cases, each runnable from the UI in one click via `/api/samples`.
+- **Dataset gallery** — three curated synthetic reference cases (unifocal, multifocal, large-diffuse) plus real, de-identified Decathlon cases, each runnable from the UI in one click via `/api/v1/samples`.
 
 ## 6. Reporting & provenance
 
